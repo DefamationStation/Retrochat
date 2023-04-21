@@ -9,7 +9,7 @@ from threading import Thread
 def read_config():
     if getattr(sys, 'frozen', False):
         # The application is running as a bundled executable
-        script_directory = sys._MEIPASS
+        script_directory = os.path.dirname(sys.executable)
     else:
         # The application is running as a script
         script_directory = os.path.dirname(os.path.abspath(__file__))

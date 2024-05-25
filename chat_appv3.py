@@ -2,7 +2,10 @@ import sys
 import os
 import json
 import requests
+import markdown
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QPushButton
+from PyQt5.QtCore import QMetaObject, Qt, Q_ARG, pyqtSlot
+from PyQt5.QtGui import QTextCursor  # Import QTextCursor here
 from threading import Thread
 
 # Function to read the config file
@@ -36,11 +39,11 @@ class ChatApp(QWidget):
 
         self.chat_display = QTextEdit()
         self.chat_display.setReadOnly(True)
-        self.chat_display.setStyleSheet("QTextEdit {background-color: #2c2c2c; color: white; font: 30px Arial; border: none;}")
+        self.chat_display.setStyleSheet("QTextEdit {background-color: #2c2c2c; color: white; font: 20px Arial; border: none;}")
         layout.addWidget(self.chat_display)
 
         self.user_input = QLineEdit()
-        self.user_input.setStyleSheet("QLineEdit {background-color: #3c3c3c; color: white; font: 30px Arial; border: none; padding: 5px;}")
+        self.user_input.setStyleSheet("QLineEdit {background-color: #3c3c3c; color: white; font: 20px Arial; border: none; padding: 5px;}")
         layout.addWidget(self.user_input)
 
         self.send_button = QPushButton("Send")
@@ -64,7 +67,8 @@ class ChatApp(QWidget):
 
     def get_ai_response(self, user_input):
         ai_response = self.chat_with_openai(user_input)
-        self.chat_display.append(f"<font color='cyan'>AI:</font> {ai_response}")
+        ai_response_html = markdown.markdown(ai_response, extensions=['fenced_code', 'codehilite'])  # Convert Markdown to HTML with code highlighting
+        QMetaObject.invokeMethod(self, "update_chat_display", Qt.QueuedConnection, Q_ARG(str, ai_response_html))
 
     def chat_with_openai(self, user_input):
         headers = {
@@ -91,6 +95,11 @@ class ChatApp(QWidget):
 
         message = response.json()["choices"][0]["message"]["content"].strip()
         return message
+
+    @pyqtSlot(str)
+    def update_chat_display(self, ai_response_html):
+        self.chat_display.append(f"<font color='cyan'>AI:</font> {ai_response_html}")  # Append the HTML to the chat display
+        self.chat_display.moveCursor(QTextCursor.End)  # Scroll to the end of the text
 
 def run_app():
     app = QApplication(sys.argv)

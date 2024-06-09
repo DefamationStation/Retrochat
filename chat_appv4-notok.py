@@ -7,11 +7,9 @@ from dotenv import load_dotenv
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLineEdit, QPushButton, QMessageBox
 from PyQt5.QtCore import Qt, QMetaObject, Q_ARG
 
-# Load environment variables from .env file
 load_dotenv()
 api_key = os.getenv('OPENAI_API_KEY')
 
-# Ensure the API key is set
 if not api_key:
     print("Error: OPENAI_API_KEY is not set in the .env file.")
     sys.exit(1)
@@ -52,7 +50,6 @@ class Chatbox(QWidget):
         self.chat_area.append(f'User: {user_message}')
         self.input_field.clear()
 
-        # Send user message to OpenAI and get response in a new thread
         threading.Thread(target=self.getOpenAIResponse, args=(user_message,)).start()
 
     def getOpenAIResponse(self, user_message):
@@ -82,7 +79,6 @@ class Chatbox(QWidget):
                 self.updateChatArea(f"Error: {response.status_code} - {response.text}")
                 response.raise_for_status()
 
-            # Extract and display the message content
             message = response.json()["choices"][0]["message"]["content"].strip()
             message = self.trimResponse(message)
             self.updateChatArea(f"Assistant: {message}")
@@ -91,7 +87,6 @@ class Chatbox(QWidget):
             self.updateChatArea(f"Error: {str(e)}")
 
     def trimResponse(self, message):
-        # Define possible tokens or extraneous text to trim from the message
         end_tokens = ["<|endoftext|>", "stop", "END", "[END]"]
         for token in end_tokens:
             if message.endswith(token):
@@ -99,7 +94,6 @@ class Chatbox(QWidget):
         return message
 
     def updateChatArea(self, text):
-        # Safely update the chat area from a different thread using invokeMethod
         QMetaObject.invokeMethod(self.chat_area, "append", Qt.QueuedConnection, Q_ARG(str, text))
 
 if __name__ == '__main__':

@@ -1,132 +1,81 @@
 import sys
+import openai
+import threading
+from dotenv import load_dotenv
 import os
-import json
-import requests
-import markdown
-from threading import Thread
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QPushButton
-from PyQt5.QtCore import QMetaObject, Qt, Q_ARG, pyqtSlot
-from PyQt5.QtGui import QTextCursor
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLineEdit, QPushButton
 
-# Function to read the config file
-def read_config():
-    if getattr(sys, 'frozen', False):
-        script_directory = os.path.dirname(sys.executable)
-    else:
-        script_directory = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(script_directory, 'config.json')
-    with open(config_path, 'r') as config_file:
-        config_data = json.load(config_file)
-    return config_data
+# Load environment variables from .env file
+load_dotenv()
+openai.api_key = os.getenv('OPENAI_API_KEY')
 
-config = read_config()
-OPENAI_API_KEY = config['OPENAI_API_KEY']
-
-class ChatApp(QWidget):
+class Chatbox(QWidget):
     def __init__(self):
         super().__init__()
-        self.init_ui()
-        self.current_ai_message = ""  # Initialize buffer for AI message
-        self.is_ai_response = False  # Track if AI is responding
-        self.token_buffer = []  # Buffer to hold tokens
 
-    def init_ui(self):
-        self.setWindowTitle('Chat with OpenAI')
-        self.setGeometry(100, 100, 800, 600)
-        self.setStyleSheet("background-color: #2c2c2c;")
-        layout = QVBoxLayout()
-        self.chat_display = QTextEdit()
-        self.chat_display.setReadOnly(True)
-        self.chat_display.setStyleSheet("QTextEdit {background-color: #2c2c2c; color: white; font: 20px Arial; border: none;}")
-        layout.addWidget(self.chat_display)
-        self.user_input = QLineEdit()
-        self.user_input.setStyleSheet("QLineEdit {background-color: #3c3c3c; color: white; font: 20px Arial; border: none; padding: 5px;}")
-        layout.addWidget(self.user_input)
-        self.send_button = QPushButton("Send")
-        self.send_button.clicked.connect(self.send_message)
-        self.send_button.setStyleSheet("QPushButton {background-color: #4c4c4c; color: white; font: bold 25px 'Segoe UI'; padding: 5px; border: none;} QPushButton:hover {background-color: #5c5c5c;}")
-        layout.addWidget(self.send_button)
-        self.user_input.returnPressed.connect(self.send_message)
-        self.setLayout(layout)
-
-    def send_message(self):
-        user_input = self.user_input.text()
-        if user_input.lower() not in ["quit", "exit"]:
-            self.is_ai_response = False
-            self.append_chat_display(f"<font color='white'>User:</font> {user_input}")
-            self.user_input.clear()
-            thread = Thread(target=self.get_ai_response, args=(user_input,))
-            thread.start()
-
-    def get_ai_response(self, user_input):
-        self.current_ai_message = ""  # Reset buffer for new AI message
-        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {OPENAI_API_KEY}"}
-        data = {
-            "model": "gpt-3.5-turbo",
-            "messages": [{"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": user_input}],
-            "temperature": 0,
-            "stream": True
-        }
-        response = requests.post("http://127.0.0.1:8080/v1/chat/completions", headers=headers, json=data, stream=True)
-
-        if response.status_code != 200:
-            print("Error:", response.status_code, response.text)
-            QMetaObject.invokeMethod(self, "append_chat_display", Qt.QueuedConnection, Q_ARG(str, f"<font color='red'>Error: {response.status_code} - {response.text}</font>"))
+        self.initUI()
+        
+    def initUI(self):
+        self.setWindowTitle('OpenAI Chatbox')
+        
+        self.layout = QVBoxLayout()
+        
+        self.chat_area = QTextEdit(self)
+        self.chat_area.setReadOnly(True)
+        self.layout.addWidget(self.chat_area)
+        
+        self.input_area = QHBoxLayout()
+        
+        self.input_field = QLineEdit(self)
+        self.input_field.returnPressed.connect(self.sendMessage)
+        self.input_area.addWidget(self.input_field)
+        
+        self.send_button = QPushButton('Send', self)
+        self.send_button.clicked.connect(self.sendMessage)
+        self.input_area.addWidget(self.send_button)
+        
+        self.layout.addLayout(self.input_area)
+        
+        self.setLayout(self.layout)
+        
+    def sendMessage(self):
+        user_message = self.input_field.text().strip()
+        if not user_message:
             return
+        
+        self.chat_area.append(f'User: {user_message}')
+        self.input_field.clear()
 
+        # Send user message to OpenAI and get response in a new thread
+        threading.Thread(target=self.getOpenAIResponse, args=(user_message,)).start()
+
+    def getOpenAIResponse(self, user_message):
         try:
-            for line in response.iter_lines():
-                if line:
-                    line_str = line.decode('utf-8').strip()
-                    if line_str.startswith("data: "):
-                        line_str = line_str[len("data: "):]
-                    if line_str == "[DONE]":
-                        break
-                    try:
-                        decoded_line = json.loads(line_str)
-                    except json.JSONDecodeError as e:
-                        print(f"JSON decode error: {e} - Line: {line_str}")
-                        continue
-                    if 'choices' in decoded_line:
-                        choice = decoded_line['choices'][0]
-                        if 'delta' in choice and 'content' in choice['delta']:
-                            content = choice['delta']['content']
-                            self.token_buffer.append(content)  # Append new content to the token buffer
-                            if len(self.token_buffer) >= 5 or content.endswith(('.', '!', '?')):  # Check for conditions to update
-                                self.current_ai_message = ''.join(self.token_buffer)
-                                self.is_ai_response = True
-                                self.token_buffer = []  # Clear the buffer
-                                QMetaObject.invokeMethod(self, "update_last_ai_message", Qt.QueuedConnection, Q_ARG(str, self.current_ai_message))
+            messages = [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": user_message}
+            ]
+            
+            # Initialize the chat completion with streaming
+            completion = openai.ChatCompletion.create(
+                model="gpt-4",
+                messages=messages,
+                stream=True
+            )
+
+            response_content = "Assistant: "
+            for chunk in completion:
+                if 'delta' in chunk.choices[0]:
+                    response_part = chunk.choices[0].delta.get('content', '')
+                    response_content += response_part
+                    # Update the chat area incrementally
+                    self.chat_area.setPlainText(response_content)
         except Exception as e:
-            print(f"Unhandled exception: {e}")
-            QMetaObject.invokeMethod(self, "append_chat_display", Qt.QueuedConnection, Q_ARG(str, "<font color='red'>Error: Unhandled exception.</font>"))
+            self.chat_area.append(f"Error: {str(e)}")
 
-    @pyqtSlot(str)
-    def update_last_ai_message(self, ai_response):
-        if self.is_ai_response:
-            cursor = self.chat_display.textCursor()
-            cursor.movePosition(QTextCursor.End)
-            if not self.chat_display.toPlainText().endswith('\n'):
-                cursor.insertBlock()
-            if not cursor.block().text().startswith("AI:"):
-                cursor.insertHtml("<font color='cyan'>AI:</font> ")
-                cursor.insertText(ai_response)
-            else:
-                cursor.select(QTextCursor.BlockUnderCursor)
-                cursor.removeSelectedText()
-                cursor.insertHtml(f"<font color='cyan'>AI:</font> {ai_response}")
-            self.chat_display.moveCursor(QTextCursor.End)
-
-    @pyqtSlot(str)
-    def append_chat_display(self, message):
-        self.chat_display.append(message)
-        self.chat_display.moveCursor(QTextCursor.End)
-
-def run_app():
+if __name__ == '__main__':
     app = QApplication(sys.argv)
-    chat_app = ChatApp()
-    chat_app.show()
+    chatbox = Chatbox()
+    chatbox.resize(400, 300)
+    chatbox.show()
     sys.exit(app.exec_())
-
-if __name__ == "__main__":
-    run_app()

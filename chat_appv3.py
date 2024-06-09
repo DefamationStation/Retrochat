@@ -84,7 +84,7 @@ class ChatApp(QWidget):
         }
 
         response = requests.post(
-            "https://api.openai.com/v1/chat/completions",
+            "http://127.0.0.1:8080/v1/chat/completions",
             headers=headers,
             json=data,
         )

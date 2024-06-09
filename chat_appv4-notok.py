@@ -28,6 +28,7 @@ class ChatApp(QWidget):
         self.init_ui()
         self.current_ai_message = ""  # Initialize buffer for AI message
         self.is_ai_response = False  # Track if AI is responding
+        self.token_buffer = []  # Buffer to hold tokens
 
     def init_ui(self):
         self.setWindowTitle('Chat with OpenAI')
@@ -66,7 +67,7 @@ class ChatApp(QWidget):
             "temperature": 0,
             "stream": True
         }
-        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=data, stream=True)
+        response = requests.post("http://127.0.0.1:8080/v1/chat/completions", headers=headers, json=data, stream=True)
 
         if response.status_code != 200:
             print("Error:", response.status_code, response.text)
@@ -90,9 +91,12 @@ class ChatApp(QWidget):
                         choice = decoded_line['choices'][0]
                         if 'delta' in choice and 'content' in choice['delta']:
                             content = choice['delta']['content']
-                            self.current_ai_message += content  # Append new content to the current message
-                            self.is_ai_response = True
-                            QMetaObject.invokeMethod(self, "update_last_ai_message", Qt.QueuedConnection, Q_ARG(str, self.current_ai_message))
+                            self.token_buffer.append(content)  # Append new content to the token buffer
+                            if len(self.token_buffer) >= 5 or content.endswith(('.', '!', '?')):  # Check for conditions to update
+                                self.current_ai_message = ''.join(self.token_buffer)
+                                self.is_ai_response = True
+                                self.token_buffer = []  # Clear the buffer
+                                QMetaObject.invokeMethod(self, "update_last_ai_message", Qt.QueuedConnection, Q_ARG(str, self.current_ai_message))
         except Exception as e:
             print(f"Unhandled exception: {e}")
             QMetaObject.invokeMethod(self, "append_chat_display", Qt.QueuedConnection, Q_ARG(str, "<font color='red'>Error: Unhandled exception.</font>"))

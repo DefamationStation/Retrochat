@@ -38,7 +38,7 @@ class Chatbox(QWidget):
                 font-family: 'Courier New', Courier, monospace;
             }
             QScrollBar:vertical {
-                width: 2px;
+                width: 4px;
                 background: black;
                 margin: 0;
                 border: 1px solid #00FF00;

@@ -24,7 +24,7 @@ class Chatbox(QWidget):
 
         # Chat history
         self.chat_history = QListWidget()
-        layout.addWidget(self.chat_history)
+        layout.addWidget(self.chat_history, 1)
         
         # User input
         self.user_input = QLineEdit()

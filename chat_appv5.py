@@ -1,11 +1,9 @@
 import os
-import requests
-import asyncio
-import functools
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLineEdit, QListWidget, QListWidgetItem, QLabel, QHBoxLayout
-from PyQt5.QtGui import QFont, QColor
+import requests  # Import requests library
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QPushButton
+from dotenv import load_dotenv
 
+load_dotenv()
 api_key = os.getenv('OPENAI_API_KEY')
 
 class Chatbox(QWidget):
@@ -16,100 +14,37 @@ class Chatbox(QWidget):
     
     def initUI(self):
         self.setWindowTitle("Chatbox")
-        self.setGeometry(100, 100, 600, 700)  # Set a larger initial size
+        self.setGeometry(100, 100, 400, 500)
 
         # Layout
         layout = QVBoxLayout()
-        self.setLayout(layout)
 
         # Chat history
-        self.chat_history = QListWidget()
-        layout.addWidget(self.chat_history, 1)
-        
+        self.chat_history = QTextEdit()
+        self.chat_history.setReadOnly(True)
+        layout.addWidget(self.chat_history)
+
         # User input
         self.user_input = QLineEdit()
-        self.user_input.setPlaceholderText("Type your message and press Enter...")
         self.user_input.returnPressed.connect(self.send_message)
         layout.addWidget(self.user_input)
 
-        # Set some styles
-        self.setStyleSheet("""
-            QWidget {
-                background-color: #2E2E2E;
-                font-family: 'Roboto', sans-serif;
-            }
-            QLineEdit {
-                padding: 15px;
-                font-size: 18px;
-                border-radius: 25px;
-                border: 2px solid #009688;
-                background-color: #FFFFFF;
-                margin: 10px;
-            }
-            QListWidget {
-                background-color: #2E2E2E;
-                border: none;
-                padding: 10px;
-                border-radius: 15px;
-                margin: 10px;
-                font-size: 16px;
-            }
-            QScrollBar:vertical {
-                border: none;
-                background: #2E2E2E;
-                width: 8px;
-                margin: 15px 0 15px 0;
-            }
-            QScrollBar::handle:vertical {
-                background: #606060;
-                min-height: 30px;
-                border-radius: 7px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                border: none;
-                background: none;
-            }
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-                background: none;
-            }
-        """)
+        # Send button
+        self.send_button = QPushButton("Send")
+        self.send_button.clicked.connect(self.send_message)
+        layout.addWidget(self.send_button)
 
-    def add_message_to_chat(self, text, sender):
-        # Create a widget for the message
-        message_widget = QWidget()
-        message_layout = QVBoxLayout()
-        message_widget.setLayout(message_layout)
-
-        message_label = QLabel(text)
-        message_label.setWordWrap(True)
-
-        # Style based on sender
-        message_label.setStyleSheet("""
-            QLabel {{
-                background-color: {};
-                padding: 10px;
-                border-radius: 10px;
-                margin: 5px 20px 5px 5px;
-            }}
-        """.format('#E0F7FA' if sender == "user" else '#E3F2FD'))
-
-        message_layout.addWidget(message_label)
-        item = QListWidgetItem()
-        item.setSizeHint(message_label.sizeHint())
-        self.chat_history.addItem(item)
-        self.chat_history.setItemWidget(item, message_widget)
-        self.chat_history.scrollToBottom()
+        self.setLayout(layout)
 
     def send_message(self):
-        user_message = self.user_input.text().strip()
-        if not user_message:
-            return
+        user_message = self.user_input.text()
         self.user_input.clear()
-        self.add_message_to_chat(f"You: {user_message}", "user")
-        self.conversation_history.append({"role": "user", "content": user_message})
-        QTimer.singleShot(500, functools.partial(self.get_bot_response, user_message))
+        self.chat_history.append(f"You: {user_message}")
 
-    async def async_get_bot_response(self, user_message):
+        # Append the user message to the conversation history
+        self.conversation_history.append({"role": "user", "content": user_message})
+
+        # Prepare the request payload
         data = {
             "model": "gpt-3.5-turbo",
             "messages": self.conversation_history
@@ -118,20 +53,29 @@ class Chatbox(QWidget):
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}"
         }
-        response = await asyncio.get_event_loop().run_in_executor(None, functools.partial(requests.post, "http://127.0.0.1:8080/v1/chat/completions", headers=headers, json=data))
-        if response.status_code == 200:
-            bot_message = response.json()["choices"][0]["message"]["content"].strip()
-            self.conversation_history.append({"role": "assistant", "content": bot_message})
-            self.add_message_to_chat(f"Bot: {bot_message}", "bot")
-        else:
-            self.add_message_to_chat(f"Error: {response.status_code} - {response.text}", "bot")
 
-    def get_bot_response(self, user_message):
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.ensure_future(self.async_get_bot_response(user_message))
-        else:
-            loop.run_until_complete(self.async_get_bot_response(user_message))
+        try:
+            # Send the request to the specified endpoint
+            response = requests.post(
+                "http://127.0.0.1:8080/v1/chat/completions",
+                headers=headers,
+                json=data
+            )
+
+            # Check for errors in the response
+            if response.status_code != 200:
+                self.chat_history.append(f"Error: {response.status_code} - {response.text}")
+                response.raise_for_status()
+
+            # Extract the message from the response
+            bot_message = response.json()["choices"][0]["message"]["content"].strip()
+
+            # Append the bot's response to the conversation history
+            self.conversation_history.append({"role": "assistant", "content": bot_message})
+            self.chat_history.append(f"Bot: {bot_message}")
+
+        except requests.RequestException as e:
+            self.chat_history.append(f"Error: {e}")
 
 if __name__ == "__main__":
     app = QApplication([])

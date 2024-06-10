@@ -92,7 +92,6 @@ class Chatbox(QWidget):
         if user_message.strip():
             self.user_input.clear()
             
-            # Convert user message to HTML using Markdown and apply custom CSS
             user_message_html = markdown.markdown(user_message, extensions=['tables', 'fenced_code'])
             user_message_html = self.apply_custom_css(user_message_html, role="user")
             self.chat_history.append(user_message_html)
@@ -107,7 +106,6 @@ class Chatbox(QWidget):
     def handle_response(self, response):
         self.conversation_history.append({"role": "assistant", "content": response})
 
-        # Convert response to HTML using Markdown and apply custom CSS
         response_html = markdown.markdown(response, extensions=['tables', 'fenced_code'])
         response_html = self.apply_custom_css(response_html, role="assistant")
         self.chat_history.append(response_html)
@@ -125,8 +123,8 @@ class Chatbox(QWidget):
                     color: #00FF00; /* Green for user */
                     font-family: 'Courier New', Courier, monospace;
                     background-color: black;
-                    margin: 0;
-                    padding: 5px 0;
+                    margin: 0; /* No margin to remove extra space */
+                    padding: 2px 0; /* Less padding to tighten spacing */
                 }
                 pre, code {
                     background-color: #333333;
@@ -160,8 +158,8 @@ class Chatbox(QWidget):
                     color: #FFBF00; /* Amber for bot */
                     font-family: 'Courier New', Courier, monospace;
                     background-color: black;
-                    margin: 0;
-                    padding: 5px 0;
+                    margin: 0; /* No margin to remove extra space */
+                    padding: 2px 0; /* Less padding to tighten spacing */
                 }
                 pre, code {
                     background-color: #333333;

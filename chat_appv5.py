@@ -116,7 +116,11 @@ class Chatbox(QWidget):
     def handle_response(self, response):
         # Append the bot's response to the conversation history
         self.conversation_history.append({"role": "assistant", "content": response})
-        self.chat_history.append(f"<b>Bot:</b> {response}")
+        # Append the bot's response incrementally
+        cursor = self.chat_history.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        cursor.insertHtml(f"<b>Bot:</b> {response}")
+        self.chat_history.setTextCursor(cursor)
 
         # Auto-scroll to the latest message
         self.chat_history.moveCursor(QTextCursor.End)
@@ -163,9 +167,13 @@ class NetworkWorker(QThread):
                 self.error_occurred.emit(error_message)
                 return
 
-            # Extract the message from the response
-            bot_message = response.json()["choices"][0]["message"]["content"].strip()
-            self.response_received.emit(bot_message)
+            # Stream the response
+            for line in response.iter_lines():
+                if line:
+                    decoded_line = line.decode('utf-8')
+                    if decoded_line.startswith("data: "):
+                        message = decoded_line[6:]
+                        self.response_received.emit(message)
 
         except requests.RequestException as e:
             self.error_occurred.emit(str(e))

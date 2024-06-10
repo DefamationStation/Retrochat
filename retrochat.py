@@ -1,9 +1,51 @@
 import sys
+import os
+import json
 import requests
 import markdown
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QScrollArea, QHBoxLayout, QFrame, QLabel, QPushButton
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint, QRect
 from PyQt5.QtGui import QTextCursor, QFont
+
+CONFIG_FILENAME = "config.json"
+DEFAULT_CONFIG = {
+    "base_url": "http://",
+    "host": "127.0.0.1:8080",
+    "path": "/v1/chat/completions"
+}
+
+def load_or_create_config():
+    config_path = os.path.join(os.getcwd(), CONFIG_FILENAME)
+    if not os.path.exists(config_path):
+        try:
+            with open(config_path, 'w') as config_file:
+                json.dump(DEFAULT_CONFIG, config_file, indent=4)
+            print(f"Config file created with default settings at {config_path}")
+        except Exception as e:
+            print(f"Error creating config file: {e}")
+            return DEFAULT_CONFIG
+    else:
+        try:
+            with open(config_path, 'r') as config_file:
+                config = json.load(config_file)
+            print(f"Config file loaded from {config_path}")
+            return config
+        except json.JSONDecodeError as e:
+            print(f"Error reading config file: {e}")
+            return DEFAULT_CONFIG
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            return DEFAULT_CONFIG
+    return DEFAULT_CONFIG
+
+def save_config(config):
+    config_path = os.path.join(os.getcwd(), CONFIG_FILENAME)
+    try:
+        with open(config_path, 'w') as config_file:
+            json.dump(config, config_file, indent=4)
+        print(f"Config file updated at {config_path}")
+    except Exception as e:
+        print(f"Error saving config file: {e}")
 
 class CustomTitleBar(QWidget):
     def __init__(self, parent=None):
@@ -17,11 +59,6 @@ class CustomTitleBar(QWidget):
         layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         
-        # commented out the title_label related lines
-        # self.title_label = QLabel(self.parent.windowTitle())
-        # self.title_label.setStyleSheet("margin-left: 10px; font-size: 14px; font-family: 'Courier New', Courier, monospace;")
-        # self.title_label.setAlignment(Qt.AlignCenter)
-        
         self.minimize_button = QPushButton("-")
         self.minimize_button.clicked.connect(self.parent.showMinimized)
         self.minimize_button.setFixedSize(30, 30)
@@ -32,8 +69,6 @@ class CustomTitleBar(QWidget):
         self.close_button.setFixedSize(30, 30)
         self.close_button.setStyleSheet("background-color: black; color: #00FF00;")
 
-        # commented out the title_label related line
-        # layout.addWidget(self.title_label)
         layout.addStretch()
         layout.addWidget(self.minimize_button)
         layout.addWidget(self.close_button)
@@ -57,6 +92,7 @@ class CustomTitleBar(QWidget):
 class Chatbox(QWidget):
     def __init__(self):
         super().__init__()
+        self.config = load_or_create_config()
         self.initUI()
         self.conversation_history = []
         self.is_moving = False
@@ -95,7 +131,7 @@ class Chatbox(QWidget):
         self.prompt_label.setStyleSheet("color: #00FF00; font-size: 14px; font-family: 'Courier New', Courier, monospace; margin: 0; padding: 0;")
         self.user_input = QLineEdit()
         self.user_input.setPlaceholderText("Type your message here...")
-        self.user_input.returnPressed.connect(self.send_message)
+        self.user_input.returnPressed.connect(self.process_input)
         self.user_input.setFont(QFont('Courier New', 14))
         self.user_input.setStyleSheet("margin: 0; padding: 0; background-color: black; color: #00FF00; border: none;")
 
@@ -147,21 +183,38 @@ class Chatbox(QWidget):
             }
         """)
 
-    def send_message(self):
+    def process_input(self):
         user_message = self.user_input.text()
         if user_message.strip():
+            if user_message.startswith("/"):
+                self.apply_command(user_message)
+            else:
+                self.send_message(user_message)
             self.user_input.clear()
 
-            user_message_html = markdown.markdown(user_message, extensions=['tables', 'fenced_code'])
-            user_message_html = self.apply_custom_css(user_message_html, role="user")
-            self.chat_history.append(user_message_html)
+    def apply_command(self, command):
+        parts = command.split()
+        if len(parts) == 3 and parts[0] == "/config" and parts[1] == "host":
+            new_host = parts[2]
+            self.config["host"] = new_host
+            save_config(self.config)
+            self.chat_history.append(f"<b style='color: yellow;'>Configuration updated: host = {new_host}</b>")
+        else:
+            self.chat_history.append(f"<b style='color: red;'>Invalid command: {command}</b>")
+        self.chat_history.moveCursor(QTextCursor.End)
 
-            self.conversation_history.append({"role": "user", "content": user_message})
+    def send_message(self, user_message):
+        user_message_html = markdown.markdown(user_message, extensions=['tables', 'fenced_code'])
+        user_message_html = self.apply_custom_css(user_message_html, role="user")
+        self.chat_history.append(user_message_html)
 
-            self.worker = NetworkWorker(self.conversation_history)
-            self.worker.response_received.connect(self.handle_response)
-            self.worker.error_occurred.connect(self.handle_error)
-            self.worker.start()
+        self.conversation_history.append({"role": "user", "content": user_message})
+
+        full_endpoint = f"{self.config['base_url']}{self.config['host']}{self.config['path']}"
+        self.worker = NetworkWorker(self.conversation_history, full_endpoint)
+        self.worker.response_received.connect(self.handle_response)
+        self.worker.error_occurred.connect(self.handle_error)
+        self.worker.start()
 
     def handle_response(self, response):
         self.conversation_history.append({"role": "assistant", "content": response})
@@ -297,16 +350,17 @@ class Chatbox(QWidget):
         if QRect(rect.left(), rect.bottom() - margin, rect.width(), margin).contains(pos):
             return 'bottom'
         if QRect(rect.right() - margin, rect.top(), margin, rect.height()).contains(pos):
-            return 'right'
-        return None
+            return 'right';
+        return None;
 
 class NetworkWorker(QThread):
     response_received = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
 
-    def __init__(self, conversation_history):
+    def __init__(self, conversation_history, endpoint):
         super().__init__()
         self.conversation_history = conversation_history
+        self.endpoint = endpoint
 
     def run(self):
         data = {
@@ -319,7 +373,7 @@ class NetworkWorker(QThread):
 
         try:
             response = requests.post(
-                "http://127.0.0.1:8080/v1/chat/completions",
+                self.endpoint,
                 headers=headers,
                 json=data
             )

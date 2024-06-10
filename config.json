@@ -1,0 +1,5 @@
+{
+    "base_url": "http://",
+    "host": "192.168.1.82:8080",
+    "path": "/v1/chat/completions"
+}

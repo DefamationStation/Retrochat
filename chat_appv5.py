@@ -77,7 +77,8 @@ class Chatbox(QWidget):
     def add_message_to_chat(self, text, sender):
         # Create a widget for the message
         message_widget = QWidget()
-        message_layout = QVBoxLayout(message_widget)
+        message_layout = QVBoxLayout()
+        message_widget.setLayout(message_layout)
 
         message_label = QLabel(text)
         message_label.setWordWrap(True)
@@ -94,7 +95,7 @@ class Chatbox(QWidget):
 
         message_layout.addWidget(message_label)
         item = QListWidgetItem()
-        item.setSizeHint(message_widget.sizeHint())
+        item.setSizeHint(message_label.sizeHint())
         self.chat_history.addItem(item)
         self.chat_history.setItemWidget(item, message_widget)
         self.chat_history.scrollToBottom()

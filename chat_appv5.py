@@ -22,14 +22,14 @@ class Chatbox(QWidget):
                 background-color: black;
                 color: #00FF00;
                 font-family: 'Courier New', Courier, monospace;
-                font-size: 14px;
+                font-size: 16px;
             }
             QLineEdit {
                 background-color: black;
                 color: #00FF00;
                 border: none;
                 font-family: 'Courier New', Courier, monospace;
-                margin-top: 10px;
+                margin-top: 13px;
             }
             QTextEdit {
                 background-color: black;

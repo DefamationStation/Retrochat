@@ -1,7 +1,7 @@
 import os
 import requests
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QScrollArea, QHBoxLayout, QFrame, QLabel
-from PyQt5.QtCore import QTimer, Qt
+from PyQt5.QtCore import QTimer, Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QTextCursor, QFont
 from dotenv import load_dotenv
 
@@ -13,7 +13,7 @@ class Chatbox(QWidget):
         super().__init__()
         self.initUI()
         self.conversation_history = []  # To store the conversation history
-    
+
     def initUI(self):
         self.setWindowTitle("Chatbox")
         self.setGeometry(100, 100, 600, 500)
@@ -107,46 +107,68 @@ class Chatbox(QWidget):
             # Append the user message to the conversation history
             self.conversation_history.append({"role": "user", "content": user_message})
 
-            # Prepare the request payload
-            data = {
-                "model": "gpt-3.5-turbo",
-                "messages": self.conversation_history
-            }
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}"
-            }
+            # Create and start the worker thread for sending the message
+            self.worker = NetworkWorker(self.conversation_history, api_key)
+            self.worker.response_received.connect(self.handle_response)
+            self.worker.error_occurred.connect(self.handle_error)
+            self.worker.start()
 
-            try:
-                # Send the request to the specified endpoint
-                response = requests.post(
-                    "http://127.0.0.1:8080/v1/chat/completions",
-                    headers=headers,
-                    json=data
-                )
+    def handle_response(self, response):
+        # Append the bot's response to the conversation history
+        self.conversation_history.append({"role": "assistant", "content": response})
+        self.chat_history.append(f"<b>Bot:</b> {response}")
 
-                # Check for errors in the response
-                if response.status_code != 200:
-                    self.chat_history.append(f"<b style='color: red;'>Error:</b> {response.status_code} - {response.text}")
-                    response.raise_for_status()
+        # Auto-scroll to the latest message
+        self.chat_history.moveCursor(QTextCursor.End)
 
-                # Extract the message from the response
-                bot_message = response.json()["choices"][0]["message"]["content"].strip()
+    def handle_error(self, error_message):
+        self.chat_history.append(f"<b style='color: red;'>Error:</b> {error_message}")
 
-                # Append the bot's response to the conversation history
-                self.conversation_history.append({"role": "assistant", "content": bot_message})
-                self.chat_history.append(f"<b>Bot:</b> {bot_message}")
-
-                # Auto-scroll to the latest message
-                self.chat_history.moveCursor(QTextCursor.End)
-
-            except requests.RequestException as e:
-                self.chat_history.append(f"<b style='color: red;'>Error:</b> {e}")
-    
     def update_chat(self):
         # This function can be extended to periodically check for new messages
         # from a server or other updates if needed.
         pass
+
+class NetworkWorker(QThread):
+    response_received = pyqtSignal(str)
+    error_occurred = pyqtSignal(str)
+
+    def __init__(self, conversation_history, api_key):
+        super().__init__()
+        self.conversation_history = conversation_history
+        self.api_key = api_key
+
+    def run(self):
+        # Prepare the request payload
+        data = {
+            "model": "gpt-3.5-turbo",
+            "messages": self.conversation_history
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}"
+        }
+
+        try:
+            # Send the request to the specified endpoint
+            response = requests.post(
+                "http://127.0.0.1:8080/v1/chat/completions",
+                headers=headers,
+                json=data
+            )
+
+            # Check for errors in the response
+            if response.status_code != 200:
+                error_message = f"{response.status_code} - {response.text}"
+                self.error_occurred.emit(error_message)
+                return
+
+            # Extract the message from the response
+            bot_message = response.json()["choices"][0]["message"]["content"].strip()
+            self.response_received.emit(bot_message)
+
+        except requests.RequestException as e:
+            self.error_occurred.emit(str(e))
 
 if __name__ == "__main__":
     app = QApplication([])

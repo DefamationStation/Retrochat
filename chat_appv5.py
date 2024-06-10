@@ -155,25 +155,26 @@ class NetworkWorker(QThread):
 
         try:
             # Send the request to the specified endpoint
-            response = requests.post(
+            with requests.post(
                 "http://127.0.0.1:8080/v1/chat/completions",
                 headers=headers,
-                json=data
-            )
+                json=data,
+                stream=True
+            ) as response:
 
-            # Check for errors in the response
-            if response.status_code != 200:
-                error_message = f"{response.status_code} - {response.text}"
-                self.error_occurred.emit(error_message)
-                return
+                # Check for errors in the response
+                if response.status_code != 200:
+                    error_message = f"{response.status_code} - {response.text}"
+                    self.error_occurred.emit(error_message)
+                    return
 
-            # Stream the response
-            for line in response.iter_lines():
-                if line:
-                    decoded_line = line.decode('utf-8')
-                    if decoded_line.startswith("data: "):
-                        message = decoded_line[6:]
-                        self.response_received.emit(message)
+                # Stream the response
+                for line in response.iter_lines():
+                    if line:
+                        decoded_line = line.decode('utf-8')
+                        if decoded_line.startswith("data: "):
+                            message = decoded_line[6:]
+                            self.response_received.emit(message)
 
         except requests.RequestException as e:
             self.error_occurred.emit(str(e))

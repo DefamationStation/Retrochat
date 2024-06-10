@@ -29,7 +29,6 @@ class Chatbox(QWidget):
                 color: #00FF00;
                 border: none;
                 font-family: 'Courier New', Courier, monospace;
-                padding-left: 10px; /* To make space for the '>' prompt */
                 margin-top: 10px;
             }
             QTextEdit {
@@ -79,13 +78,15 @@ class Chatbox(QWidget):
 
         # User input
         self.prompt_label = QLabel(">")
-        self.prompt_label.setStyleSheet("color: #00FF00; font-size: 14px; font-family: 'Courier New', Courier, monospace;")
+        self.prompt_label.setStyleSheet("color: #00FF00; font-size: 14px; font-family: 'Courier New', Courier, monospace; margin: 0; padding: 0;")
         self.user_input = QLineEdit()
         self.user_input.setPlaceholderText("Type your message here...")
         self.user_input.returnPressed.connect(self.send_message)
         self.user_input.setFont(QFont('Courier New', 14))
-        input_layout.addWidget(self.prompt_label)
-        input_layout.addWidget(self.user_input)
+        self.user_input.setStyleSheet("margin: 0; padding: 0;")
+
+        input_layout.addWidget(self.prompt_label, 0, Qt.AlignLeft)
+        input_layout.addWidget(self.user_input, 1)
 
         main_layout.addLayout(chat_layout)
         main_layout.addLayout(input_layout)

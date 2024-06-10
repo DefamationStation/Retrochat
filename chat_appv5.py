@@ -99,7 +99,7 @@ class Chatbox(QWidget):
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}"
         }
-        response = await asyncio.get_event_loop().run_in_executor(None, functools.partial(requests.post, "http://192.168.1.82:8080/v1/chat/completions", headers=headers, json=data))
+        response = await asyncio.get_event_loop().run_in_executor(None, functools.partial(requests.post, "http://127.0.0.1:8080/v1/chat/completions", headers=headers, json=data))
         if response.status_code == 200:
             bot_message = response.json()["choices"][0]["message"]["content"].strip()
             self.conversation_history.append({"role": "assistant", "content": bot_message})

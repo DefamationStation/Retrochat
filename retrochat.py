@@ -11,7 +11,10 @@ CONFIG_FILENAME = "config.json"
 DEFAULT_CONFIG = {
     "base_url": "http://",
     "host": "127.0.0.1:8080",
-    "path": "/v1/chat/completions"
+    "path": "/v1/chat/completions",
+    "user_message_color": "#00FF00",
+    "assistant_message_color": "#FFBF00",
+    "font_size": 14
 }
 
 def load_or_create_config():
@@ -48,9 +51,10 @@ def save_config(config):
         print(f"Error saving config file: {e}")
 
 class CustomTitleBar(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, font_size=14):
         super().__init__(parent)
         self.parent = parent
+        self.font_size = font_size
         self.initUI()
 
     def initUI(self):
@@ -62,12 +66,12 @@ class CustomTitleBar(QWidget):
         self.minimize_button = QPushButton("-")
         self.minimize_button.clicked.connect(self.parent.showMinimized)
         self.minimize_button.setFixedSize(30, 30)
-        self.minimize_button.setStyleSheet("background-color: black; color: #00FF00;")
+        self.minimize_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(self.font_size))
 
         self.close_button = QPushButton("x")
         self.close_button.clicked.connect(self.parent.close)
         self.close_button.setFixedSize(30, 30)
-        self.close_button.setStyleSheet("background-color: black; color: #00FF00;")
+        self.close_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(self.font_size))
 
         layout.addStretch()
         layout.addWidget(self.minimize_button)
@@ -93,6 +97,7 @@ class Chatbox(QWidget):
     def __init__(self):
         super().__init__()
         self.config = load_or_create_config()
+        self.font_size = self.config.get("font_size", 14)  # Get the font size from config
         self.initUI()
         self.conversation_history = []
         self.is_moving = False
@@ -111,13 +116,13 @@ class Chatbox(QWidget):
         chat_layout = QVBoxLayout()
         input_layout = QHBoxLayout()
 
-        self.custom_title_bar = CustomTitleBar(self)
+        self.custom_title_bar = CustomTitleBar(self, self.font_size)
         main_layout.addWidget(self.custom_title_bar)
 
         self.chat_history = QTextEdit()
         self.chat_history.setReadOnly(True)
-        self.chat_history.setFont(QFont('Courier New', 14))
-        self.chat_history.setStyleSheet("padding: 10px; background-color: black; color: #00FF00;")
+        self.chat_history.setFont(QFont("Courier New", self.font_size))
+        self.chat_history.setStyleSheet(f"padding: 10px; background-color: #000000; color: {self.config['user_message_color']};")
 
         self.chat_scroll_area = QScrollArea()
         self.chat_scroll_area.setWidgetResizable(True)
@@ -128,12 +133,12 @@ class Chatbox(QWidget):
         chat_layout.addWidget(self.chat_scroll_area)
 
         self.prompt_label = QLabel(">")
-        self.prompt_label.setStyleSheet("color: #00FF00; font-size: 14px; font-family: 'Courier New', Courier, monospace; margin: 0; padding: 0;")
+        self.prompt_label.setStyleSheet(f"color: {self.config['user_message_color']}; font-size: {self.font_size}px; font-family: Courier New; margin: 0; padding: 0;")
         self.user_input = QLineEdit()
         self.user_input.setPlaceholderText("Type your message here...")
         self.user_input.returnPressed.connect(self.process_input)
-        self.user_input.setFont(QFont('Courier New', 14))
-        self.user_input.setStyleSheet("margin: 0; padding: 0; background-color: black; color: #00FF00; border: none;")
+        self.user_input.setFont(QFont("Courier New", self.font_size))
+        self.user_input.setStyleSheet(f"margin: 0; padding: 0; background-color: #000000; color: {self.config['user_message_color']}; border: none;")
 
         input_layout.addWidget(self.prompt_label, 0, Qt.AlignLeft)
         input_layout.addWidget(self.user_input, 1)
@@ -142,45 +147,45 @@ class Chatbox(QWidget):
         main_layout.addLayout(input_layout)
 
         self.setLayout(main_layout)
-        self.setStyleSheet("""
-            QWidget {
+        self.setStyleSheet(f"""
+            QWidget {{
                 background-color: black;
                 color: #00FF00;
                 font-family: 'Courier New', Courier, monospace;
-                font-size: 16px;
-            }
-            QLineEdit {
+                font-size: {self.font_size}px;
+            }}
+            QLineEdit {{
                 background-color: black;
                 color: #00FF00;
                 border: none;
                 font-family: 'Courier New', Courier, monospace;
                 margin-top: 13px;
-            }
-            QTextEdit {
+            }}
+            QTextEdit {{
                 background-color: black;
                 color: #00FF00;
                 border: none;
                 font-family: 'Courier New', Courier, monospace;
-            }
-            QScrollBar:vertical {
+            }}
+            QScrollBar:vertical {{
                 width: 4px;
                 background: black;
                 margin: 0;
                 border: 1px solid #00FF00;
                 border-radius: 4px;
-            }
-            QScrollBar::handle:vertical {
+            }}
+            QScrollBar::handle:vertical {{
                 background: #00FF00;
                 min-height: 20px;
                 border-radius: 4px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
                 height: 0;
                 subcontrol-origin: margin;
-            }
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+            }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
                 background: none;
-            }
+            }}
         """)
 
     def process_input(self):
@@ -196,15 +201,85 @@ class Chatbox(QWidget):
         parts = command.split(maxsplit=3)  # Use maxsplit to ensure we capture the entire value part as a single string
         if len(parts) == 3 and parts[0] == "/config":
             key, value = parts[1], parts[2]
+
             if key in self.config:
+                current_value = self.config[key]
+                if isinstance(current_value, int):
+                    try:
+                        value = int(value)
+                    except ValueError:
+                        self.chat_history.append(f"<b style='color: red;'>Invalid value for {key}: must be an integer</b>")
+                        self.chat_history.moveCursor(QTextCursor.End)
+                        return
+                elif isinstance(current_value, float):
+                    try:
+                        value = float(value)
+                    except ValueError:
+                        self.chat_history.append(f"<b style='color: red;'>Invalid value for {key}: must be a float</b>")
+                        self.chat_history.moveCursor(QTextCursor.End)
+                        return
+
+                # Update the configuration
                 self.config[key] = value
                 save_config(self.config)
                 self.chat_history.append(f"<b style='color: yellow;'>Configuration updated: {key} = {value}</b>")
+                
+                # Apply the new font size if it's changed
+                if key == "font_size":
+                    self.font_size = value
+                    self.update_font_sizes()
+
             else:
                 self.chat_history.append(f"<b style='color: red;'>Invalid configuration key: {key}</b>")
         else:
             self.chat_history.append(f"<b style='color: red;'>Invalid command: {command}</b>")
         self.chat_history.moveCursor(QTextCursor.End)
+
+    def update_font_sizes(self):
+        self.chat_history.setFont(QFont("Courier New", self.font_size))
+        self.user_input.setFont(QFont("Courier New", self.font_size))
+        self.prompt_label.setStyleSheet(f"color: {self.config['user_message_color']}; font-size: {self.font_size}px; font-family: Courier New; margin: 0; padding: 0;")
+
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: black;
+                color: #00FF00;
+                font-family: 'Courier New', Courier, monospace;
+                font-size: {self.font_size}px;
+            }}
+            QLineEdit {{
+                background-color: black;
+                color: #00FF00;
+                border: none;
+                font-family: 'Courier New', Courier, monospace;
+                margin-top: 13px;
+            }}
+            QTextEdit {{
+                background-color: black;
+                color: #00FF00;
+                border: none;
+                font-family: 'Courier New', Courier, monospace;
+            }}
+            QScrollBar:vertical {{
+                width: 4px;
+                background: black;
+                margin: 0;
+                border: 1px solid #00FF00;
+                border-radius: 4px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: #00FF00;
+                min-height: 20px;
+                border-radius: 4px;
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0;
+                subcontrol-origin: margin;
+            }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+                background: none;
+            }}
+        """)
 
     def send_message(self, user_message):
         user_message_html = markdown.markdown(user_message, extensions=['tables', 'fenced_code'])
@@ -233,72 +308,72 @@ class Chatbox(QWidget):
 
     def apply_custom_css(self, html_content, role):
         if role == "user":
-            custom_css = """
+            custom_css = f"""
             <style>
-                div.user-message {
-                    color: #00FF00; /* Green for user */
-                    font-family: 'Courier New', Courier, monospace;
-                    background-color: black;
-                    margin: 0; /* No margin to remove extra space */
-                    padding: 2px 0; /* Less padding to tighten spacing */
-                }
-                pre, code {
+                div.user-message {{
+                    color: {self.config['user_message_color']};
+                    font-family: 'Courier New';
+                    background-color: #000000;
+                    margin: 0;
+                    padding: 2px 0;
+                }}
+                pre, code {{
                     background-color: #333333;
-                    color: #00FF00;
+                    color: {self.config['user_message_color']};
                     border-radius: 4px;
                     padding: 5px;
                     margin: 0;
-                }
-                table {
+                }}
+                table {{
                     width: 100%;
                     border-collapse: collapse;
-                }
-                th, td {
-                    border: 1px solid #00FF00;
+                }}
+                th, td {{
+                    border: 1px solid {self.config['user_message_color']};
                     padding: 3px;
-                }
-                blockquote {
-                    border-left: 4px solid #00FF00;
+                }}
+                blockquote {{
+                    border-left: 4px solid {self.config['user_message_color']};
                     margin: 5px 0;
                     padding-left: 10px;
-                    color: #00FF00;
+                    color: {self.config['user_message_color']};
                     background-color: #222222;
-                }
+                }}
             </style>
             """
             return f"{custom_css}<div class='user-message'>{html_content}</div>"
         else:
-            custom_css = """
+            custom_css = f"""
             <style>
-                div.bot-message {
-                    color: #FFBF00; /* Amber for bot */
-                    font-family: 'Courier New', Courier, monospace;
-                    background-color: black;
-                    margin: 0; /* No margin to remove extra space */
-                    padding: 2px 0; /* Less padding to tighten spacing */
-                }
-                pre, code {
+                div.bot-message {{
+                    color: {self.config['assistant_message_color']};
+                    font-family: 'Courier New';
+                    background-color: #000000;
+                    margin: 0;
+                    padding: 2px 0;
+                }}
+                pre, code {{
                     background-color: #333333;
-                    color: #FFBF00;
+                    color: {self.config['assistant_message_color']};
                     border-radius: 4px;
                     padding: 5px;
                     margin: 0;
-                }
-                table {
+                }}
+                table {{
                     width: 100%;
                     border-collapse: collapse.
-                }
-                th, td {
-                    border: 1px solid #FFBF00;
+                }}
+                th, td {{
+                    border: 1px solid {self.config['assistant_message_color']};
                     padding: 3px;
-                }
-                blockquote {
-                    border-left: 4px solid #FFBF00;
+                }}
+                blockquote {{
+                    border-left: 4px solid {self.config['assistant_message_color']};
                     margin: 5px 0;
                     padding-left: 10px;
-                    color: #FFBF00;
+                    color: {self.config['assistant_message_color']};
                     background-color: #222222;
-                }
+                }}
             </style>
             """
             return f"{custom_css}<div class='bot-message'>{html_content}</div>"

@@ -35,7 +35,7 @@ class Chatbox(QWidget):
         # Set some styles
         self.setStyleSheet("""
             QWidget {
-                background-color: #FAFAFA;
+                background-color: #2E2E2E;
                 font-family: 'Roboto', sans-serif;
             }
             QLineEdit {
@@ -53,6 +53,27 @@ class Chatbox(QWidget):
                 border-radius: 15px;
                 margin: 10px;
                 font-size: 16px;
+            }
+            QListWidget::item {
+                color: #FFFFFF;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #2E2E2E;
+                width: 14px;
+                margin: 15px 0 15px 0;
+            }
+            QScrollBar::handle:vertical {
+                background: #606060;
+                min-height: 30px;
+                border-radius: 7px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                border: none;
+                background: none;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
             }
         """)
 

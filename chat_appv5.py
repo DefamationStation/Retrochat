@@ -118,43 +118,76 @@ class Chatbox(QWidget):
         self.chat_history.append(f"<b style='color: red;'>Error:</b> {error_message}")
 
     def apply_custom_css(self, html_content, role):
-        # Apply custom CSS for better visual appearance
-        custom_css = """
-        <style>
-            body {
-                font-family: 'Courier New', Courier, monospace;
-                color: #00FF00;
-                background-color: black;
-                margin: 0;
-                padding: 0;
-            }
-            pre, code {
-                background-color: #333333;
-                color: #00FF00;
-                border-radius: 4px;
-                padding: 5px;
-                margin: 0;
-            }
-            table {
-                width: 100%;
-                border-collapse: collapse;
-            }
-            th, td {
-                border: 1px solid #00FF00;
-                padding: 3px;
-            }
-            blockquote {
-                border-left: 4px solid #00FF00;
-                margin: 5px 0;
-                padding-left: 10px;
-                color: #00FF00;
-                background-color: #222222;
-            }
-        </style>
-        """
-        prefix = f"<b>{'You' if role == 'user' else 'Bot'}:</b>"
-        # Tighter spacing by reducing margins and not adding extra breaks
-        return f"{prefix}{custom_css}<div style='margin-top: 2px;'>{html_content}</div>"
+        if role == "user":
+            custom_css = """
+            <style>
+                div.user-message {
+                    color: #00FF00; /* Green for user */
+                    font-family: 'Courier New', Courier, monospace;
+                    background-color: black;
+                    margin: 0;
+                    padding: 5px 0;
+                }
+                pre, code {
+                    background-color: #333333;
+                    color: #00FF00;
+                    border-radius: 4px;
+                    padding: 5px;
+                    margin: 0;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+                th, td {
+                    border: 1px solid #00FF00;
+                    padding: 3px;
+                }
+                blockquote {
+                    border-left: 4px solid #00FF00;
+                    margin: 5px 0;
+                    padding-left: 10px;
+                    color: #00FF00;
+                    background-color: #222222;
+                }
+            </style>
+            """
+            return f"{custom_css}<div class='user-message'>{html_content}</div>"
+        else:
+            custom_css = """
+            <style>
+                div.bot-message {
+                    color: #FFBF00; /* Amber for bot */
+                    font-family: 'Courier New', Courier, monospace;
+                    background-color: black;
+                    margin: 0;
+                    padding: 5px 0;
+                }
+                pre, code {
+                    background-color: #333333;
+                    color: #FFBF00;
+                    border-radius: 4px;
+                    padding: 5px;
+                    margin: 0;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+                th, td {
+                    border: 1px solid #FFBF00;
+                    padding: 3px;
+                }
+                blockquote {
+                    border-left: 4px solid #FFBF00;
+                    margin: 5px 0;
+                    padding-left: 10px;
+                    color: #FFBF00;
+                    background-color: #222222;
+                }
+            </style>
+            """
+            return f"{custom_css}<div class='bot-message'>{html_content}</div>"
 
 class NetworkWorker(QThread):
     response_received = pyqtSignal(str)

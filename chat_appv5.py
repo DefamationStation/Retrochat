@@ -1,24 +1,109 @@
+import sys
 import requests
 import markdown
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QScrollArea, QHBoxLayout, QFrame, QLabel
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QScrollArea, QHBoxLayout, QFrame, QLabel, QPushButton
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint
 from PyQt5.QtGui import QTextCursor, QFont
+
+class CustomTitleBar(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.parent = parent
+        self.initUI()
+
+    def initUI(self):
+        self.setFixedHeight(30)
+        self.setStyleSheet("background-color: #333333; color: #00FF00;")
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        # commented out the title_label related lines
+        # self.title_label = QLabel(self.parent.windowTitle())
+        # self.title_label.setStyleSheet("margin-left: 10px; font-size: 14px; font-family: 'Courier New', Courier, monospace;")
+        # self.title_label.setAlignment(Qt.AlignCenter)
+        
+        self.minimize_button = QPushButton("-")
+        self.minimize_button.clicked.connect(self.parent.showMinimized)
+        self.minimize_button.setFixedSize(30, 30)
+        self.minimize_button.setStyleSheet("background-color: black; color: #00FF00;")
+
+        self.close_button = QPushButton("x")
+        self.close_button.clicked.connect(self.parent.close)
+        self.close_button.setFixedSize(30, 30)
+        self.close_button.setStyleSheet("background-color: black; color: #00FF00;")
+
+        # commented out the title_label related line
+        # layout.addWidget(self.title_label)
+        layout.addStretch()
+        layout.addWidget(self.minimize_button)
+        layout.addWidget(self.close_button)
+        
+        self.setLayout(layout)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.parent.is_moving = True
+            self.parent.startPos = event.globalPos()
+
+    def mouseMoveEvent(self, event):
+        if self.parent.is_moving:
+            delta = QPoint(event.globalPos() - self.parent.startPos)
+            self.parent.move(self.parent.x() + delta.x(), self.parent.y() + delta.y())
+            self.parent.startPos = event.globalPos()
+
+    def mouseReleaseEvent(self, event):
+        self.parent.is_moving = False
 
 class Chatbox(QWidget):
     def __init__(self):
         super().__init__()
         self.initUI()
         self.conversation_history = []
+        self.is_moving = False
+        self.startPos = QPoint(0, 0)
+        self.right_button_pressed = False  # Initialize the attribute
+        self.oldPos = QPoint(0, 0)         # Initialize the attribute
 
     def initUI(self):
-        self.setWindowTitle("Chatbox")
+        self.setWindowTitle("Retrochat")
         self.setGeometry(300, 300, 1100, 550)
+        self.setWindowFlags(Qt.FramelessWindowHint)
 
-        qtRectangle = self.frameGeometry()
-        centerPoint = QApplication.screens()[0].availableGeometry().center()
-        qtRectangle.moveCenter(centerPoint)
-        self.move(qtRectangle.topLeft())
+        main_layout = QVBoxLayout()
+        chat_layout = QVBoxLayout()
+        input_layout = QHBoxLayout()
 
+        self.custom_title_bar = CustomTitleBar(self)
+        main_layout.addWidget(self.custom_title_bar)
+
+        self.chat_history = QTextEdit()
+        self.chat_history.setReadOnly(True)
+        self.chat_history.setFont(QFont('Courier New', 14))
+        self.chat_history.setStyleSheet("padding: 10px; background-color: black; color: #00FF00;")
+
+        self.chat_scroll_area = QScrollArea()
+        self.chat_scroll_area.setWidgetResizable(True)
+        self.chat_scroll_area.setWidget(self.chat_history)
+        self.chat_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.chat_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.chat_scroll_area.setFrameShape(QFrame.NoFrame)
+        chat_layout.addWidget(self.chat_scroll_area)
+
+        self.prompt_label = QLabel(">")
+        self.prompt_label.setStyleSheet("color: #00FF00; font-size: 14px; font-family: 'Courier New', Courier, monospace; margin: 0; padding: 0;")
+        self.user_input = QLineEdit()
+        self.user_input.setPlaceholderText("Type your message here...")
+        self.user_input.returnPressed.connect(self.send_message)
+        self.user_input.setFont(QFont('Courier New', 14))
+        self.user_input.setStyleSheet("margin: 0; padding: 0; background-color: black; color: #00FF00; border: none;")
+
+        input_layout.addWidget(self.prompt_label, 0, Qt.AlignLeft)
+        input_layout.addWidget(self.user_input, 1)
+
+        main_layout.addLayout(chat_layout)
+        main_layout.addLayout(input_layout)
+
+        self.setLayout(main_layout)
         self.setStyleSheet("""
             QWidget {
                 background-color: black;
@@ -59,39 +144,6 @@ class Chatbox(QWidget):
                 background: none;
             }
         """)
-
-        main_layout = QVBoxLayout()
-        chat_layout = QVBoxLayout()
-        input_layout = QHBoxLayout()
-
-        self.chat_history = QTextEdit()
-        self.chat_history.setReadOnly(True)
-        self.chat_history.setFont(QFont('Courier New', 14))
-        self.chat_history.setStyleSheet("padding: 10px;")
-
-        self.chat_scroll_area = QScrollArea()
-        self.chat_scroll_area.setWidgetResizable(True)
-        self.chat_scroll_area.setWidget(self.chat_history)
-        self.chat_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.chat_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.chat_scroll_area.setFrameShape(QFrame.NoFrame)
-        chat_layout.addWidget(self.chat_scroll_area)
-
-        self.prompt_label = QLabel(">")
-        self.prompt_label.setStyleSheet("color: #00FF00; font-size: 14px; font-family: 'Courier New', Courier, monospace; margin: 0; padding: 0;")
-        self.user_input = QLineEdit()
-        self.user_input.setPlaceholderText("Type your message here...")
-        self.user_input.returnPressed.connect(self.send_message)
-        self.user_input.setFont(QFont('Courier New', 14))
-        self.user_input.setStyleSheet("margin: 0; padding: 0;")
-
-        input_layout.addWidget(self.prompt_label, 0, Qt.AlignLeft)
-        input_layout.addWidget(self.user_input, 1)
-
-        main_layout.addLayout(chat_layout)
-        main_layout.addLayout(input_layout)
-
-        self.setLayout(main_layout)
 
     def send_message(self):
         user_message = self.user_input.text()
@@ -176,7 +228,7 @@ class Chatbox(QWidget):
                 }
                 table {
                     width: 100%;
-                    border-collapse: collapse;
+                    border-collapse: collapse.
                 }
                 th, td {
                     border: 1px solid #FFBF00;
@@ -192,6 +244,32 @@ class Chatbox(QWidget):
             </style>
             """
             return f"{custom_css}<div class='bot-message'>{html_content}</div>"
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.is_moving = True
+            self.startPos = event.globalPos()
+        elif event.button() == Qt.RightButton:
+            self.right_button_pressed = True
+            self.oldPos = event.globalPos()
+
+    def mouseMoveEvent(self, event):
+        if self.is_moving:
+            delta = QPoint(event.globalPos() - self.startPos)
+            self.move(self.x() + delta.x(), self.y() + delta.y())
+            self.startPos = event.globalPos()
+        elif self.right_button_pressed:
+            self.handle_resize(event)
+
+    def mouseReleaseEvent(self, event):
+        self.is_moving = False
+        self.right_button_pressed = False
+
+    def handle_resize(self, event):
+        if self.right_button_pressed:
+            diff = event.globalPos() - self.oldPos
+            self.resize(self.width() + diff.x(), self.height() + diff.y())
+            self.oldPos = event.globalPos()
 
 class NetworkWorker(QThread):
     response_received = pyqtSignal(str)
@@ -232,4 +310,4 @@ if __name__ == "__main__":
     app = QApplication([])
     chatbox = Chatbox()
     chatbox.show()
-    app.exec_()
+    sys.exit(app.exec_())

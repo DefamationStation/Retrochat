@@ -1,18 +1,14 @@
-import os
 import requests
+import markdown
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QScrollArea, QHBoxLayout, QFrame, QLabel
-from PyQt5.QtCore import QTimer, Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QTextCursor, QFont
-from dotenv import load_dotenv
-
-load_dotenv()
-api_key = os.getenv('OPENAI_API_KEY')
 
 class Chatbox(QWidget):
     def __init__(self):
         super().__init__()
         self.initUI()
-        self.conversation_history = [] 
+        self.conversation_history = []
 
     def initUI(self):
         self.setWindowTitle("Chatbox")
@@ -65,6 +61,7 @@ class Chatbox(QWidget):
         self.chat_history = QTextEdit()
         self.chat_history.setReadOnly(True)
         self.chat_history.setFont(QFont('Courier New', 14))
+        self.chat_history.setStyleSheet("padding: 10px;")
 
         self.chat_scroll_area = QScrollArea()
         self.chat_scroll_area.setWidgetResizable(True)
@@ -90,43 +87,82 @@ class Chatbox(QWidget):
 
         self.setLayout(main_layout)
 
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.update_chat)
-        self.timer.start(1000)
-
     def send_message(self):
         user_message = self.user_input.text()
         if user_message.strip():
             self.user_input.clear()
-            self.chat_history.append(f"<b>You:</b> {user_message}")
+            
+            # Convert user message to HTML using Markdown and apply custom CSS
+            user_message_html = markdown.markdown(user_message, extensions=['tables', 'fenced_code'])
+            user_message_html = self.apply_custom_css(user_message_html, role="user")
+            self.chat_history.append(user_message_html)
 
             self.conversation_history.append({"role": "user", "content": user_message})
 
-            self.worker = NetworkWorker(self.conversation_history, api_key)
+            self.worker = NetworkWorker(self.conversation_history)
             self.worker.response_received.connect(self.handle_response)
             self.worker.error_occurred.connect(self.handle_error)
             self.worker.start()
 
     def handle_response(self, response):
         self.conversation_history.append({"role": "assistant", "content": response})
-        self.chat_history.append(f"<b>Bot:</b> {response}")
+
+        # Convert response to HTML using Markdown and apply custom CSS
+        response_html = markdown.markdown(response, extensions=['tables', 'fenced_code'])
+        response_html = self.apply_custom_css(response_html, role="assistant")
+        self.chat_history.append(response_html)
 
         self.chat_history.moveCursor(QTextCursor.End)
 
     def handle_error(self, error_message):
         self.chat_history.append(f"<b style='color: red;'>Error:</b> {error_message}")
 
-    def update_chat(self):
-        pass
+    def apply_custom_css(self, html_content, role):
+        # Apply custom CSS for better visual appearance
+        custom_css = """
+        <style>
+            body {
+                font-family: 'Courier New', Courier, monospace;
+                color: #00FF00;
+                background-color: black;
+                margin: 0;
+                padding: 0;
+            }
+            pre, code {
+                background-color: #333333;
+                color: #00FF00;
+                border-radius: 4px;
+                padding: 5px;
+                margin: 0;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            th, td {
+                border: 1px solid #00FF00;
+                padding: 3px;
+            }
+            blockquote {
+                border-left: 4px solid #00FF00;
+                margin: 5px 0;
+                padding-left: 10px;
+                color: #00FF00;
+                background-color: #222222;
+            }
+        </style>
+        """
+        prefix = f"<b>{'You' if role == 'user' else 'Bot'}:</b>"
+        # Tighter spacing by reducing margins and not adding extra breaks
+        return f"{prefix}{custom_css}<div style='margin-top: 2px;'>{html_content}</div>"
 
 class NetworkWorker(QThread):
     response_received = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
 
-    def __init__(self, conversation_history, api_key):
+    def __init__(self, conversation_history):
         super().__init__()
         self.conversation_history = conversation_history
-        self.api_key = api_key
 
     def run(self):
         data = {
@@ -134,8 +170,7 @@ class NetworkWorker(QThread):
             "messages": self.conversation_history
         }
         headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
+            "Content-Type": "application/json"
         }
 
         try:

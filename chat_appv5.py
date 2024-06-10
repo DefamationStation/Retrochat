@@ -2,7 +2,7 @@ import sys
 import requests
 import markdown
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QScrollArea, QHBoxLayout, QFrame, QLabel, QPushButton
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint, QRect
 from PyQt5.QtGui import QTextCursor, QFont
 
 class CustomTitleBar(QWidget):
@@ -63,6 +63,8 @@ class Chatbox(QWidget):
         self.startPos = QPoint(0, 0)
         self.right_button_pressed = False
         self.oldPos = QPoint(0, 0)
+        self.resizing = False  # To track if the window is being resized
+        self.resize_direction = None  # To track the direction of resizing
 
     def initUI(self):
         self.setWindowTitle("Retrochat")
@@ -149,7 +151,7 @@ class Chatbox(QWidget):
         user_message = self.user_input.text()
         if user_message.strip():
             self.user_input.clear()
-            
+
             user_message_html = markdown.markdown(user_message, extensions=['tables', 'fenced_code'])
             user_message_html = self.apply_custom_css(user_message_html, role="user")
             self.chat_history.append(user_message_html)
@@ -247,29 +249,56 @@ class Chatbox(QWidget):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            self.is_moving = True
-            self.startPos = event.globalPos()
-        elif event.button() == Qt.RightButton:
-            self.right_button_pressed = True
-            self.oldPos = event.globalPos()
+            if self.is_on_border(event.pos()):
+                self.resizing = True
+                self.resize_direction = self.get_resize_direction(event.pos())
+                self.oldPos = event.globalPos()
+            else:
+                self.is_moving = True
+                self.startPos = event.globalPos()
 
     def mouseMoveEvent(self, event):
-        if self.is_moving:
+        if self.resizing:
+            self.handle_resize(event)
+        elif self.is_moving:
             delta = QPoint(event.globalPos() - self.startPos)
             self.move(self.x() + delta.x(), self.y() + delta.y())
             self.startPos = event.globalPos()
-        elif self.right_button_pressed:
-            self.handle_resize(event)
 
     def mouseReleaseEvent(self, event):
         self.is_moving = False
-        self.right_button_pressed = False
+        self.resizing = False
 
     def handle_resize(self, event):
-        if self.right_button_pressed:
+        if self.resizing:
             diff = event.globalPos() - self.oldPos
-            self.resize(self.width() + diff.x(), self.height() + diff.y())
+            if self.resize_direction == 'bottom_right':
+                self.resize(self.width() + diff.x(), self.height() + diff.y())
+            elif self.resize_direction == 'bottom':
+                self.resize(self.width(), self.height() + diff.y())
+            elif self.resize_direction == 'right':
+                self.resize(self.width() + diff.x(), self.height())
             self.oldPos = event.globalPos()
+
+    def is_on_border(self, pos):
+        margin = 10  # Sensitivity for border resizing
+        rect = self.rect()
+        bottom_right = QRect(rect.right() - margin, rect.bottom() - margin, margin, margin)
+        bottom = QRect(rect.left(), rect.bottom() - margin, rect.width(), margin)
+        right = QRect(rect.right() - margin, rect.top(), margin, rect.height())
+
+        return bottom_right.contains(pos) or bottom.contains(pos) or right.contains(pos)
+
+    def get_resize_direction(self, pos):
+        margin = 10
+        rect = self.rect()
+        if QRect(rect.right() - margin, rect.bottom() - margin, margin, margin).contains(pos):
+            return 'bottom_right'
+        if QRect(rect.left(), rect.bottom() - margin, rect.width(), margin).contains(pos):
+            return 'bottom'
+        if QRect(rect.right() - margin, rect.top(), margin, rect.height()).contains(pos):
+            return 'right'
+        return None
 
 class NetworkWorker(QThread):
     response_received = pyqtSignal(str)

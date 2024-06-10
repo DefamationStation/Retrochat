@@ -12,7 +12,13 @@ class Chatbox(QWidget):
 
     def initUI(self):
         self.setWindowTitle("Chatbox")
-        self.setGeometry(100, 100, 600, 500)
+        self.setGeometry(300, 300, 1100, 550)
+
+        qtRectangle = self.frameGeometry()
+        centerPoint = QApplication.screens()[0].availableGeometry().center()
+        qtRectangle.moveCenter(centerPoint)
+        self.move(qtRectangle.topLeft())
+
         self.setStyleSheet("""
             QWidget {
                 background-color: black;

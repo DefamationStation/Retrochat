@@ -61,8 +61,8 @@ class Chatbox(QWidget):
         self.conversation_history = []
         self.is_moving = False
         self.startPos = QPoint(0, 0)
-        self.right_button_pressed = False  # Initialize the attribute
-        self.oldPos = QPoint(0, 0)         # Initialize the attribute
+        self.right_button_pressed = False
+        self.oldPos = QPoint(0, 0)
 
     def initUI(self):
         self.setWindowTitle("Retrochat")

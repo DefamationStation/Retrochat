@@ -1,6 +1,8 @@
 import os
-import requests  # Import requests library
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QPushButton
+import requests
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QScrollArea, QHBoxLayout, QFrame, QLabel
+from PyQt5.QtCore import QTimer, Qt
+from PyQt5.QtGui import QTextCursor, QFont
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,68 +16,136 @@ class Chatbox(QWidget):
     
     def initUI(self):
         self.setWindowTitle("Chatbox")
-        self.setGeometry(100, 100, 400, 500)
+        self.setGeometry(100, 100, 600, 500)
+        self.setStyleSheet("""
+            QWidget {
+                background-color: black;
+                color: #00FF00;
+                font-family: 'Courier New', Courier, monospace;
+                font-size: 14px;
+            }
+            QLineEdit {
+                background-color: black;
+                color: #00FF00;
+                border: none;
+                font-family: 'Courier New', Courier, monospace;
+                padding-left: 10px; /* To make space for the '>' prompt */
+                margin-top: 10px;
+            }
+            QTextEdit {
+                background-color: black;
+                color: #00FF00;
+                border: none;
+                font-family: 'Courier New', Courier, monospace;
+            }
+            QScrollBar:vertical {
+                width: 8px;
+                background: black;
+                margin: 0;
+                border: 1px solid #00FF00;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background: #00FF00;
+                min-height: 20px;
+                border-radius: 4px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0;
+                subcontrol-origin: margin;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
+            }
+        """)
 
-        # Layout
-        layout = QVBoxLayout()
+        # Layouts
+        main_layout = QVBoxLayout()
+        chat_layout = QVBoxLayout()
+        input_layout = QHBoxLayout()
 
-        # Chat history
+        # Chat history with scrollbar
         self.chat_history = QTextEdit()
         self.chat_history.setReadOnly(True)
-        layout.addWidget(self.chat_history)
+        self.chat_history.setFont(QFont('Courier New', 14))
+
+        self.chat_scroll_area = QScrollArea()
+        self.chat_scroll_area.setWidgetResizable(True)
+        self.chat_scroll_area.setWidget(self.chat_history)
+        self.chat_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.chat_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.chat_scroll_area.setFrameShape(QFrame.NoFrame)
+        chat_layout.addWidget(self.chat_scroll_area)
 
         # User input
+        self.prompt_label = QLabel(">")
+        self.prompt_label.setStyleSheet("color: #00FF00; font-size: 14px; font-family: 'Courier New', Courier, monospace;")
         self.user_input = QLineEdit()
+        self.user_input.setPlaceholderText("Type your message here...")
         self.user_input.returnPressed.connect(self.send_message)
-        layout.addWidget(self.user_input)
+        self.user_input.setFont(QFont('Courier New', 14))
+        input_layout.addWidget(self.prompt_label)
+        input_layout.addWidget(self.user_input)
 
-        # Send button
-        self.send_button = QPushButton("Send")
-        self.send_button.clicked.connect(self.send_message)
-        layout.addWidget(self.send_button)
+        main_layout.addLayout(chat_layout)
+        main_layout.addLayout(input_layout)
 
-        self.setLayout(layout)
+        self.setLayout(main_layout)
+
+        # Timer for smooth updates
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_chat)
+        self.timer.start(1000)  # Check for updates every second
 
     def send_message(self):
         user_message = self.user_input.text()
-        self.user_input.clear()
-        self.chat_history.append(f"You: {user_message}")
+        if user_message.strip():  # Check if message is not just whitespace
+            self.user_input.clear()
+            self.chat_history.append(f"<b>You:</b> {user_message}")
 
-        # Append the user message to the conversation history
-        self.conversation_history.append({"role": "user", "content": user_message})
+            # Append the user message to the conversation history
+            self.conversation_history.append({"role": "user", "content": user_message})
 
-        # Prepare the request payload
-        data = {
-            "model": "gpt-3.5-turbo",
-            "messages": self.conversation_history
-        }
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
-        }
+            # Prepare the request payload
+            data = {
+                "model": "gpt-3.5-turbo",
+                "messages": self.conversation_history
+            }
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
 
-        try:
-            # Send the request to the specified endpoint
-            response = requests.post(
-                "http://127.0.0.1:8080/v1/chat/completions",
-                headers=headers,
-                json=data
-            )
+            try:
+                # Send the request to the specified endpoint
+                response = requests.post(
+                    "http://127.0.0.1:8080/v1/chat/completions",
+                    headers=headers,
+                    json=data
+                )
 
-            # Check for errors in the response
-            if response.status_code != 200:
-                self.chat_history.append(f"Error: {response.status_code} - {response.text}")
-                response.raise_for_status()
+                # Check for errors in the response
+                if response.status_code != 200:
+                    self.chat_history.append(f"<b style='color: red;'>Error:</b> {response.status_code} - {response.text}")
+                    response.raise_for_status()
 
-            # Extract the message from the response
-            bot_message = response.json()["choices"][0]["message"]["content"].strip()
+                # Extract the message from the response
+                bot_message = response.json()["choices"][0]["message"]["content"].strip()
 
-            # Append the bot's response to the conversation history
-            self.conversation_history.append({"role": "assistant", "content": bot_message})
-            self.chat_history.append(f"Bot: {bot_message}")
+                # Append the bot's response to the conversation history
+                self.conversation_history.append({"role": "assistant", "content": bot_message})
+                self.chat_history.append(f"<b>Bot:</b> {bot_message}")
 
-        except requests.RequestException as e:
-            self.chat_history.append(f"Error: {e}")
+                # Auto-scroll to the latest message
+                self.chat_history.moveCursor(QTextCursor.End)
+
+            except requests.RequestException as e:
+                self.chat_history.append(f"<b style='color: red;'>Error:</b> {e}")
+    
+    def update_chat(self):
+        # This function can be extended to periodically check for new messages
+        # from a server or other updates if needed.
+        pass
 
 if __name__ == "__main__":
     app = QApplication([])

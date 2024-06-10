@@ -12,7 +12,7 @@ class Chatbox(QWidget):
     def __init__(self):
         super().__init__()
         self.initUI()
-        self.conversation_history = []  # To store the conversation history
+        self.conversation_history = [] 
 
     def initUI(self):
         self.setWindowTitle("Chatbox")
@@ -58,12 +58,10 @@ class Chatbox(QWidget):
             }
         """)
 
-        # Layouts
         main_layout = QVBoxLayout()
         chat_layout = QVBoxLayout()
         input_layout = QHBoxLayout()
 
-        # Chat history with scrollbar
         self.chat_history = QTextEdit()
         self.chat_history.setReadOnly(True)
         self.chat_history.setFont(QFont('Courier New', 14))
@@ -76,7 +74,6 @@ class Chatbox(QWidget):
         self.chat_scroll_area.setFrameShape(QFrame.NoFrame)
         chat_layout.addWidget(self.chat_scroll_area)
 
-        # User input
         self.prompt_label = QLabel(">")
         self.prompt_label.setStyleSheet("color: #00FF00; font-size: 14px; font-family: 'Courier New', Courier, monospace; margin: 0; padding: 0;")
         self.user_input = QLineEdit()
@@ -93,40 +90,33 @@ class Chatbox(QWidget):
 
         self.setLayout(main_layout)
 
-        # Timer for smooth updates
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_chat)
-        self.timer.start(1000)  # Check for updates every second
+        self.timer.start(1000)
 
     def send_message(self):
         user_message = self.user_input.text()
-        if user_message.strip():  # Check if message is not just whitespace
+        if user_message.strip():
             self.user_input.clear()
             self.chat_history.append(f"<b>You:</b> {user_message}")
 
-            # Append the user message to the conversation history
             self.conversation_history.append({"role": "user", "content": user_message})
 
-            # Create and start the worker thread for sending the message
             self.worker = NetworkWorker(self.conversation_history, api_key)
             self.worker.response_received.connect(self.handle_response)
             self.worker.error_occurred.connect(self.handle_error)
             self.worker.start()
 
     def handle_response(self, response):
-        # Append the bot's response to the conversation history
         self.conversation_history.append({"role": "assistant", "content": response})
         self.chat_history.append(f"<b>Bot:</b> {response}")
 
-        # Auto-scroll to the latest message
         self.chat_history.moveCursor(QTextCursor.End)
 
     def handle_error(self, error_message):
         self.chat_history.append(f"<b style='color: red;'>Error:</b> {error_message}")
 
     def update_chat(self):
-        # This function can be extended to periodically check for new messages
-        # from a server or other updates if needed.
         pass
 
 class NetworkWorker(QThread):
@@ -139,7 +129,6 @@ class NetworkWorker(QThread):
         self.api_key = api_key
 
     def run(self):
-        # Prepare the request payload
         data = {
             "model": "gpt-3.5-turbo",
             "messages": self.conversation_history
@@ -150,20 +139,17 @@ class NetworkWorker(QThread):
         }
 
         try:
-            # Send the request to the specified endpoint
             response = requests.post(
                 "http://127.0.0.1:8080/v1/chat/completions",
                 headers=headers,
                 json=data
             )
 
-            # Check for errors in the response
             if response.status_code != 200:
                 error_message = f"{response.status_code} - {response.text}"
                 self.error_occurred.emit(error_message)
                 return
 
-            # Extract the message from the response
             bot_message = response.json()["choices"][0]["message"]["content"].strip()
             self.response_received.emit(bot_message)
 

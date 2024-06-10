@@ -193,12 +193,15 @@ class Chatbox(QWidget):
             self.user_input.clear()
 
     def apply_command(self, command):
-        parts = command.split()
-        if len(parts) == 3 and parts[0] == "/config" and parts[1] == "host":
-            new_host = parts[2]
-            self.config["host"] = new_host
-            save_config(self.config)
-            self.chat_history.append(f"<b style='color: yellow;'>Configuration updated: host = {new_host}</b>")
+        parts = command.split(maxsplit=3)  # Use maxsplit to ensure we capture the entire value part as a single string
+        if len(parts) == 3 and parts[0] == "/config":
+            key, value = parts[1], parts[2]
+            if key in self.config:
+                self.config[key] = value
+                save_config(self.config)
+                self.chat_history.append(f"<b style='color: yellow;'>Configuration updated: {key} = {value}</b>")
+            else:
+                self.chat_history.append(f"<b style='color: red;'>Invalid configuration key: {key}</b>")
         else:
             self.chat_history.append(f"<b style='color: red;'>Invalid command: {command}</b>")
         self.chat_history.moveCursor(QTextCursor.End)
@@ -350,8 +353,8 @@ class Chatbox(QWidget):
         if QRect(rect.left(), rect.bottom() - margin, rect.width(), margin).contains(pos):
             return 'bottom'
         if QRect(rect.right() - margin, rect.top(), margin, rect.height()).contains(pos):
-            return 'right';
-        return None;
+            return 'right'
+        return None
 
 class NetworkWorker(QThread):
     response_received = pyqtSignal(str)

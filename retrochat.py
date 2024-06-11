@@ -16,7 +16,7 @@ class ConfigManager:
         "user_message_color": "#00FF00",
         "assistant_message_color": "#FFBF00",
         "font_size": 18,
-        "current_chat_filename": "chat_1.json"
+        "current_chat_filename": "chat_2.json"
     }
 
     @classmethod
@@ -44,7 +44,7 @@ class ConfigManager:
         cls.save_config(config)
 
 class ChatHistoryManager:
-    def __init__(self, chat_filename="chat_1.json"):
+    def __init__(self, chat_filename="chat_2.json"):
         self.chat_filename = chat_filename
 
     def save_chat_history(self, chat_history):
@@ -68,12 +68,8 @@ class ChatHistoryManager:
         if os.path.exists(chat_history_path):
             try:
                 os.remove(chat_history_path)
-                print(f"Deleted file: {chat_history_path}")
             except Exception as e:
                 print(f"Error deleting file {chat_history_path}: {e}")
-        else:
-            print(f"File does not exist: {chat_history_path}")
-
 
     def rename_chat_file(self, new_name):
         old_path = os.path.join(os.getcwd(), self.chat_filename)
@@ -153,7 +149,7 @@ class Chatbox(QWidget):
     def __init__(self):
         super().__init__()
         self.config = ConfigManager.load_config()
-        self.chat_manager = ChatHistoryManager(chat_filename=self.config.get('current_chat_filename', 'chat_1.json'))
+        self.chat_manager = ChatHistoryManager(chat_filename=self.config.get('current_chat_filename', 'chat_2.json'))
         self.font_size = self.config.get("font_size", 14)
         self.conversation_history = self.chat_manager.load_chat_history()
         self.command_history = []
@@ -331,16 +327,51 @@ class Chatbox(QWidget):
         if len(parts) == 3:
             key, value = parts[1], parts[2]
             if key in self.config:
-                self.set_config_value(key, value)
+                # Ensure the correct type is used for each config key
+                if key == "font_size":
+                    value = int(value)  # Convert to integer
+                # Update the configuration
+                ConfigManager.save_config_value(key, value)
+                # Reload the configuration to get the updated values
+                self.config = ConfigManager.load_config()
+                self.apply_config_changes(key)
             else:
                 self.display_error(f"Invalid configuration key: {key}")
+        else:
+            self.display_error(f"Usage: /config <key> <value>")
+
+    def apply_config_changes(self, key):
+        if key == "font_size":
+            self.font_size = self.config["font_size"]
+            self.update_font_sizes()
+        elif key in ["user_message_color", "assistant_message_color"]:
+            self.chat_history.setStyleSheet(self.get_chat_style())
+            self.prompt_label.setStyleSheet(self.get_prompt_style())
+            self.user_input.setStyleSheet(self.get_input_style())
+        else:
+            self.chat_history.setStyleSheet(self.get_global_style())
+
+    def update_font_sizes(self):
+        # Update the font size of various UI components to reflect the new setting
+        self.chat_history.setFont(QFont("Courier New", self.font_size))
+        self.user_input.setFont(QFont("Courier New", self.font_size))
+        self.prompt_label.setStyleSheet(f"color: {self.config['user_message_color']}; font-size: {self.font_size}px; font-family: Courier New; margin: 0; padding: 0;")
+
+        # Apply global style again in case other elements need font size update
+        self.setStyleSheet(self.get_global_style())
+
+        # Refresh the chat display to use the updated font size
+        self.load_chat_to_display()
+
+        # Ensure the chat layout reflects the new font size immediately
+        self.chat_scroll_area.setWidget(self.chat_history)
+        self.chat_scroll_area.updateGeometry()
+        self.chat_history.updateGeometry()
 
     def manage_chat(self, parts):
         if len(parts) >= 3:
             action, filename = parts[1], parts[2]
             filename = self.ensure_json_extension(filename)
-            
-            print(f"Action: {action}, Filename: {filename}")
 
             if action == "new":
                 self.chat_manager.chat_filename = filename
@@ -353,12 +384,10 @@ class Chatbox(QWidget):
                 self.chat_history.append(f"<b style='color: yellow;'>Chat saved as {filename}.</b>")
             elif action == "delete":
                 self.chat_manager.set_chat_filename(filename)
-                print(f"Attempting to delete file: {self.chat_manager.chat_filename}")
                 self.chat_manager.delete_chat_file()
                 
                 chat_history_path = os.path.join(os.getcwd(), self.chat_manager.chat_filename)
                 if not os.path.exists(chat_history_path):
-                    print(f"File {chat_history_path} successfully deleted.")
                     self.chat_history.append(f"<b style='color: yellow;'>Chat file {filename} deleted.</b>")
                 else:
                     self.display_error(f"Failed to delete chat file: {filename}")
@@ -381,8 +410,6 @@ class Chatbox(QWidget):
         else:
             self.display_error(f"Invalid chat command: {parts[0]}")
 
-
-
     def list_chat_files(self):
         json_files = [f for f in os.listdir(os.getcwd()) if f.endswith('.json')]
         self.chat_history.append("<b style='color: yellow;'>Available chat files:</b>")
@@ -396,10 +423,6 @@ class Chatbox(QWidget):
         chat_history_path = os.path.join(os.getcwd(), self.chat_manager.chat_filename)
         if os.path.exists(chat_history_path):
             self.chat_manager.save_chat_history(self.conversation_history)
-            print("Chat history has been reset and saved.")
-        else:
-            print("Chat history reset but not saved as the file does not exist.")
-        
         self.chat_history.append(f"<b style='color: yellow;'>Chat history has been reset.</b>")
         self.chat_history.moveCursor(QTextCursor.End)
 
@@ -415,11 +438,6 @@ class Chatbox(QWidget):
         if not filename.endswith('.json'):
             filename += '.json'
         return filename
-
-    def update_font_sizes(self):
-        self.chat_history.setFont(QFont("Courier New", self.font_size))
-        self.user_input.setFont(QFont("Courier New", self.font_size))
-        self.prompt_label.setStyleSheet(f"color: {self.config['user_message_color']}; font-size: {self.font_size}px; font-family: Courier New; margin: 0; padding: 0;")
 
     def send_message(self, user_message):
         user_message_html = markdown.markdown(user_message, extensions=['tables', 'fenced_code'])

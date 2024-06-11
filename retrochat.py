@@ -344,7 +344,7 @@ class Chatbox(QWidget):
 
             if action == "new":
                 self.chat_manager.chat_filename = filename
-                self.chat_manager.save_chat_history([])  # Save an empty chat history for new chat
+                self.chat_manager.save_chat_history([])
                 self.open_chat(filename)
                 self.chat_history.append(f"<b style='color: yellow;'>New chat {filename} created and opened.</b>")
             elif action == "save":
@@ -360,11 +360,9 @@ class Chatbox(QWidget):
                 if not os.path.exists(chat_history_path):
                     print(f"File {chat_history_path} successfully deleted.")
                     self.chat_history.append(f"<b style='color: yellow;'>Chat file {filename} deleted.</b>")
-                    # Avoid resetting chat history here, as it would re-create the deleted file
                 else:
                     self.display_error(f"Failed to delete chat file: {filename}")
                 
-                # Set to the next available filename or reset state
                 self.chat_manager.set_chat_filename(self.chat_manager.get_next_available_filename())
             elif action == "reset":
                 self.reset_chat()
@@ -395,7 +393,6 @@ class Chatbox(QWidget):
     def reset_chat(self):
         self.conversation_history = []
         self.chat_history.clear()
-        # Check if the file exists before saving
         chat_history_path = os.path.join(os.getcwd(), self.chat_manager.chat_filename)
         if os.path.exists(chat_history_path):
             self.chat_manager.save_chat_history(self.conversation_history)

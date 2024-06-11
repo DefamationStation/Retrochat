@@ -138,6 +138,8 @@ class Chatbox(QWidget):
         self.font_size = self.config.get("font_size", 14)  # Get the font size from config
         self.initUI()
         self.conversation_history = load_chat_history()  # Load the conversation history from file
+        self.command_history = []  # List to store commands
+        self.command_index = -1  # Index to track command history navigation
         self.is_moving = False
         self.startPos = QPoint(0, 0)
         self.right_button_pressed = False
@@ -230,7 +232,6 @@ class Chatbox(QWidget):
         """)
 
     def load_chat_to_display(self):
-        # Load the saved chat history into the display
         for message in self.conversation_history:
             if message['role'] == 'user':
                 user_message_html = markdown.markdown(message['content'], extensions=['tables', 'fenced_code'])
@@ -247,6 +248,8 @@ class Chatbox(QWidget):
         if user_message.strip():
             if user_message.startswith("/"):
                 self.apply_command(user_message)
+                self.command_history.append(user_message)  # Add command to history
+                self.command_index = -1  # Reset the command index after a new command is entered
             else:
                 self.send_message(user_message)
             self.user_input.clear()
@@ -273,12 +276,10 @@ class Chatbox(QWidget):
                         self.chat_history.moveCursor(QTextCursor.End)
                         return
 
-                # Update the configuration
                 self.config[key] = value
                 save_config(self.config)
                 self.chat_history.append(f"<b style='color: yellow;'>Configuration updated: {key} = {value}</b>")
                 
-                # Apply the new font size if it's changed
                 if key == "font_size":
                     self.font_size = value
                     self.update_font_sizes()
@@ -292,7 +293,6 @@ class Chatbox(QWidget):
         self.chat_history.moveCursor(QTextCursor.End)
 
     def reset_chat(self):
-        # Clear the chat history and the conversation history
         self.conversation_history = []
         self.chat_history.clear()
         save_chat_history(self.conversation_history)
@@ -350,7 +350,7 @@ class Chatbox(QWidget):
         self.chat_history.append(user_message_html)
 
         self.conversation_history.append({"role": "user", "content": user_message})
-        save_chat_history(self.conversation_history)  # Save the conversation history after adding user's message
+        save_chat_history(self.conversation_history)
 
         full_endpoint = f"{self.config['base_url']}{self.config['host']}{self.config['path']}"
         self.worker = NetworkWorker(self.conversation_history, full_endpoint)
@@ -360,7 +360,7 @@ class Chatbox(QWidget):
 
     def handle_response(self, response):
         self.conversation_history.append({"role": "assistant", "content": response})
-        save_chat_history(self.conversation_history)  # Save the conversation history after receiving the assistant's response
+        save_chat_history(self.conversation_history)
 
         response_html = markdown.markdown(response, extensions=['tables', 'fenced_code'])
         response_html = self.apply_custom_css(response_html, role="assistant")
@@ -442,6 +442,25 @@ class Chatbox(QWidget):
             </style>
             """
             return f"{custom_css}<div class='bot-message'>{html_content}</div>"
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Up:
+            if self.command_history:
+                if self.command_index == -1:  # First time pressing up, start from the last command
+                    self.command_index = len(self.command_history) - 1
+                else:
+                    self.command_index = max(0, self.command_index - 1)
+                self.user_input.setText(self.command_history[self.command_index])
+        elif event.key() == Qt.Key_Down:
+            if self.command_index != -1:
+                self.command_index = min(len(self.command_history), self.command_index + 1)
+                if self.command_index < len(self.command_history):
+                    self.user_input.setText(self.command_history[self.command_index])
+                else:
+                    self.user_input.clear()
+                    self.command_index = -1  # Reset to the initial state
+        else:
+            super().keyPressEvent(event)  # Handle other keys normally
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:

@@ -1,17 +1,15 @@
 # Retrochat
-a simple light chatbox app that lets you use your local llama.cpp server.
+a simple light chatbox app that lets you use your local llama.cpp server. screenshots below.
 
-discord link https://discord.gg/dZxjYNyNth
+documentatio link: https://github.com/DefamationStation/Retrochat/wiki
+
+discord link: https://discord.gg/dZxjYNyNth
 
 Download the .py, install the dependencies and run.
 
 or 
 
 download the .exe and run anywhere.
-
-
-
-
 
 type '/config host (your host ip and port here)' to change the llama.cpp endpoint server.
 

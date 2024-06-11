@@ -1,4 +1,7 @@
 # Retrochat
+
+#This app is being developed using [Aider](https://aider.chat/). 
+
 a simple light chatbox app that lets you use your local llama.cpp server. screenshots below.
 
 make sure to read for detailed commands: https://github.com/DefamationStation/Retrochat/wiki

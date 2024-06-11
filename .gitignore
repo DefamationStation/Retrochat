@@ -18,10 +18,6 @@ build/retrochat/localpycs/pyimod02_importers.pyc
 build/retrochat/localpycs/pyimod03_ctypes.pyc
 build/retrochat/localpycs/pyimod04_pywin32.pyc
 build/retrochat/localpycs/struct.pyc
-chat_history.json
-config.json
 build/retrochat/COLLECT-00.toc
 build/retrochat/retrochat.exe
 dist/
-
-config.json

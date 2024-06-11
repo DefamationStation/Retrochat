@@ -8,6 +8,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint, QRect
 from PyQt5.QtGui import QTextCursor, QFont
 
 CONFIG_FILENAME = "config.json"
+CHAT_HISTORY_FILENAME = "chat_history.json"
 DEFAULT_CONFIG = {
     "base_url": "http://",
     "host": "127.0.0.1:8080",
@@ -49,6 +50,31 @@ def save_config(config):
         print(f"Config file updated at {config_path}")
     except Exception as e:
         print(f"Error saving config file: {e}")
+
+def save_chat_history(chat_history):
+    chat_history_path = os.path.join(os.getcwd(), CHAT_HISTORY_FILENAME)
+    try:
+        with open(chat_history_path, 'w') as chat_history_file:
+            json.dump(chat_history, chat_history_file, indent=4)
+        print(f"Chat history saved at {chat_history_path}")
+    except Exception as e:
+        print(f"Error saving chat history: {e}")
+
+def load_chat_history():
+    chat_history_path = os.path.join(os.getcwd(), CHAT_HISTORY_FILENAME)
+    if os.path.exists(chat_history_path):
+        try:
+            with open(chat_history_path, 'r') as chat_history_file:
+                chat_history = json.load(chat_history_file)
+            print(f"Chat history loaded from {chat_history_path}")
+            return chat_history
+        except json.JSONDecodeError as e:
+            print(f"Error reading chat history file: {e}")
+            return []
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            return []
+    return []
 
 class CustomTitleBar(QWidget):
     def __init__(self, parent=None, font_size=14):
@@ -111,13 +137,16 @@ class Chatbox(QWidget):
         self.config = load_or_create_config()
         self.font_size = self.config.get("font_size", 14)  # Get the font size from config
         self.initUI()
-        self.conversation_history = []
+        self.conversation_history = load_chat_history()  # Load the conversation history from file
         self.is_moving = False
         self.startPos = QPoint(0, 0)
         self.right_button_pressed = False
         self.oldPos = QPoint(0, 0)
         self.resizing = False  # To track if the window is being resized
         self.resize_direction = None  # To track the direction of resizing
+
+        # Load chat history into the display
+        self.load_chat_to_display()
 
     def initUI(self):
         self.setWindowTitle("Retrochat")
@@ -200,6 +229,19 @@ class Chatbox(QWidget):
             }}
         """)
 
+    def load_chat_to_display(self):
+        # Load the saved chat history into the display
+        for message in self.conversation_history:
+            if message['role'] == 'user':
+                user_message_html = markdown.markdown(message['content'], extensions=['tables', 'fenced_code'])
+                user_message_html = self.apply_custom_css(user_message_html, role="user")
+                self.chat_history.append(user_message_html)
+            elif message['role'] == 'assistant':
+                assistant_message_html = markdown.markdown(message['content'], extensions=['tables', 'fenced_code'])
+                assistant_message_html = self.apply_custom_css(assistant_message_html, role="assistant")
+                self.chat_history.append(assistant_message_html)
+        self.chat_history.moveCursor(QTextCursor.End)
+
     def process_input(self):
         user_message = self.user_input.text()
         if user_message.strip():
@@ -243,9 +285,18 @@ class Chatbox(QWidget):
 
             else:
                 self.chat_history.append(f"<b style='color: red;'>Invalid configuration key: {key}</b>")
+        elif command.strip() == "/reset chat":
+            self.reset_chat()
         else:
             self.chat_history.append(f"<b style='color: red;'>Invalid command: {command}</b>")
         self.chat_history.moveCursor(QTextCursor.End)
+
+    def reset_chat(self):
+        # Clear the chat history and the conversation history
+        self.conversation_history = []
+        self.chat_history.clear()
+        save_chat_history(self.conversation_history)
+        self.chat_history.append(f"<b style='color: yellow;'>Chat history has been reset.</b>")
 
     def update_font_sizes(self):
         self.chat_history.setFont(QFont("Courier New", self.font_size))
@@ -299,6 +350,7 @@ class Chatbox(QWidget):
         self.chat_history.append(user_message_html)
 
         self.conversation_history.append({"role": "user", "content": user_message})
+        save_chat_history(self.conversation_history)  # Save the conversation history after adding user's message
 
         full_endpoint = f"{self.config['base_url']}{self.config['host']}{self.config['path']}"
         self.worker = NetworkWorker(self.conversation_history, full_endpoint)
@@ -308,6 +360,7 @@ class Chatbox(QWidget):
 
     def handle_response(self, response):
         self.conversation_history.append({"role": "assistant", "content": response})
+        save_chat_history(self.conversation_history)  # Save the conversation history after receiving the assistant's response
 
         response_html = markdown.markdown(response, extensions=['tables', 'fenced_code'])
         response_html = self.apply_custom_css(response_html, role="assistant")

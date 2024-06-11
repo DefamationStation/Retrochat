@@ -1,26 +1,50 @@
 # Retrochat
-a simple light chatbox app that lets you use your local llama.cpp server. screenshots below.
 
-make sure to read for detailed commands: https://github.com/DefamationStation/Retrochat/wiki
+## Overview
+Retrochat is a simple and lightweight chatbox application that leverages your local [llama.cpp](https://github.com/ggerganov/llama.cpp) server. This app is designed for easy configuration and seamless communication through a classic chat interface.
 
-discord link: https://discord.gg/dZxjYNyNth
+## Development
+This application is being actively developed using [Aider](https://aider.chat/),
 
-Download the .py, install the dependencies and run.
+## Features
+- **Local Server Integration**: Easily connect to your local llama.cpp server.
+- **Resizable Interface**: Adjust the chatbox size by clicking and dragging near the bottom right corner.
+- **Simple Configuration**: Modify settings on-the-fly using straightforward commands or by editing the `config.json` file.
 
-or 
+## Getting Started
+### Installation
+1. **Python Script**:
+   - Download the `Retrochat.py` file.
+   - Install the required dependencies.
+   - Run the script:
+     ```bash
+     python Retrochat.py
+     ```
+2. **Executable**:
+   - Download the `.exe` file.
+   - Run the executable directly from any location.
 
-download the .exe and run anywhere.
+### Configuration
+- To set or change the `llama.cpp` endpoint server, type:
+  ```bash
+  /config host your_host_ip:port
+  ```
+- Any parameter in the `config.json` file can be modified similarly using the `/config` command followed by the parameter name and its new value.
 
-type '/config host (your host ip and port here)' to change the llama.cpp endpoint server.
+## Resources
+- **Detailed Commands and Documentation**: For a comprehensive list of commands and usage details, visit the [Retrochat Wiki](https://github.com/DefamationStation/Retrochat/wiki).
+- **Join Our Community**: Connect with other users and developers on our [Discord](https://discord.gg/dZxjYNyNth).
 
-any value that exists in the config.json can be changed the same way.
+## Screenshots
+![Retrochat Screenshot 1](https://github.com/DefamationStation/Retrochat/assets/82258900/8cfc0087-aa33-4e58-9903-0abe049387da)
+![Retrochat Screenshot 2](https://github.com/DefamationStation/Retrochat/assets/82258900/1ada054d-de2f-4f6d-9eb4-a0a34f3214da)
+![Retrochat Screenshot 3](https://github.com/DefamationStation/Retrochat/assets/82258900/f9f9cfa9-e81e-4d3a-963a-6e7eeb3f90d9)
+![Retrochat in Action](https://github.com/DefamationStation/Retrochat/assets/82258900/0e0b9b75-3c21-4c94-83ae-e22a0e34fe84)
 
-![image](https://github.com/DefamationStation/Retrochat/assets/82258900/8cfc0087-aa33-4e58-9903-0abe049387da)
+## Usage Tips
+- The chatbox can be resized by clicking and dragging near the edges of the app at the bottom right corner.
 
-![image](https://github.com/DefamationStation/Retrochat/assets/82258900/1ada054d-de2f-4f6d-9eb4-a0a34f3214da)
+## Contribution
+Contributions are welcome! Feel free to fork the project, make changes, and submit a pull request.
 
-![image](https://github.com/DefamationStation/Retrochat/assets/82258900/f9f9cfa9-e81e-4d3a-963a-6e7eeb3f90d9)
-
-![app_window_man-ezgif com-video-to-gif-converter](https://github.com/DefamationStation/Retrochat/assets/82258900/0e0b9b75-3c21-4c94-83ae-e22a0e34fe84)
-
-box can be resized by click and dragging near the edges of the app on bottom right corner
+---

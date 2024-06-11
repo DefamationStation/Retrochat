@@ -68,6 +68,11 @@ class CustomTitleBar(QWidget):
         self.minimize_button.setFixedSize(30, 30)
         self.minimize_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(self.font_size))
 
+        self.fullscreen_button = QPushButton("[ ]")
+        self.fullscreen_button.clicked.connect(self.toggleFullscreen)
+        self.fullscreen_button.setFixedSize(30, 30)
+        self.fullscreen_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(self.font_size))
+
         self.close_button = QPushButton("x")
         self.close_button.clicked.connect(self.parent.close)
         self.close_button.setFixedSize(30, 30)
@@ -75,9 +80,16 @@ class CustomTitleBar(QWidget):
 
         layout.addStretch()
         layout.addWidget(self.minimize_button)
+        layout.addWidget(self.fullscreen_button)
         layout.addWidget(self.close_button)
         
         self.setLayout(layout)
+
+    def toggleFullscreen(self):
+        if self.parent.isMaximized():
+            self.parent.showNormal()
+        else:
+            self.parent.showMaximized()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:

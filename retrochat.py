@@ -1,5 +1,5 @@
-import sys
 import os
+import sys
 import json
 import requests
 import markdown
@@ -7,97 +7,92 @@ from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLine
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint, QRect
 from PyQt5.QtGui import QTextCursor, QFont
 
-DEFAULT_CHAT_FILENAME = "chat_1.json"  # Default chat file
-CONFIG_FILENAME = "config.json"
-DEFAULT_CONFIG = {
-    "base_url": "http://",
-    "host": "127.0.0.1:8080",
-    "path": "/v1/chat/completions",
-    "user_message_color": "#00FF00",
-    "assistant_message_color": "#FFBF00",
-    "font_size": 20
-}
+class ConfigManager:
+    CONFIG_FILENAME = "config.json"
+    DEFAULT_CONFIG = {
+        "base_url": "http://",
+        "host": "127.0.0.1:8080",
+        "path": "/v1/chat/completions",
+        "user_message_color": "#00FF00",
+        "assistant_message_color": "#FFBF00",
+        "font_size": 18,
+        "current_chat_filename": "chat_1.json"
+    }
 
-def load_or_create_config():
-    config_path = os.path.join(os.getcwd(), CONFIG_FILENAME)
-    if not os.path.exists(config_path):
-        try:
-            with open(config_path, 'w') as config_file:
-                json.dump(DEFAULT_CONFIG, config_file, indent=4)
-            print(f"Config file created with default settings at {config_path}")
-        except Exception as e:
-            print(f"Error creating config file: {e}")
-            return DEFAULT_CONFIG
-    else:
+    @classmethod
+    def load_config(cls):
+        config_path = os.path.join(os.getcwd(), cls.CONFIG_FILENAME)
+        if not os.path.exists(config_path):
+            cls.save_config(cls.DEFAULT_CONFIG)
+            return cls.DEFAULT_CONFIG
         try:
             with open(config_path, 'r') as config_file:
-                config = json.load(config_file)
-            print(f"Config file loaded from {config_path}")
-            return config
-        except json.JSONDecodeError as e:
-            print(f"Error reading config file: {e}")
-            return DEFAULT_CONFIG
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-            return DEFAULT_CONFIG
-    return DEFAULT_CONFIG
+                return json.load(config_file)
+        except (json.JSONDecodeError, Exception):
+            return cls.DEFAULT_CONFIG
 
-def save_config(config):
-    config_path = os.path.join(os.getcwd(), CONFIG_FILENAME)
-    try:
+    @classmethod
+    def save_config(cls, config):
+        config_path = os.path.join(os.getcwd(), cls.CONFIG_FILENAME)
         with open(config_path, 'w') as config_file:
             json.dump(config, config_file, indent=4)
-        print(f"Config file updated at {config_path}")
-    except Exception as e:
-        print(f"Error saving config file: {e}")
 
-def save_chat_history(chat_filename, chat_history):
-    chat_history_path = os.path.join(os.getcwd(), chat_filename)
-    try:
-        with open(chat_history_path, 'w') as chat_history_file:
-            json.dump(chat_history, chat_history_file, indent=4)
-        print(f"Chat history saved at {chat_history_path}")
-    except Exception as e:
-        print(f"Error saving chat history: {e}")
+    @classmethod
+    def save_config_value(cls, key, value):
+        config = cls.load_config()
+        config[key] = value
+        cls.save_config(config)
 
-def load_chat_history(chat_filename):
-    chat_history_path = os.path.join(os.getcwd(), chat_filename)
-    if os.path.exists(chat_history_path):
-        try:
-            with open(chat_history_path, 'r') as chat_history_file:
-                chat_history = json.load(chat_history_file)
-            print(f"Chat history loaded from {chat_history_path}")
-            return chat_history
-        except json.JSONDecodeError as e:
-            print(f"Error reading chat history file: {e}")
-            return []
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-            return []
-    return []
+class ChatHistoryManager:
+    def __init__(self, chat_filename="chat_1.json"):
+        self.chat_filename = chat_filename
 
-def delete_chat_file(chat_filename):
-    chat_history_path = os.path.join(os.getcwd(), chat_filename)
-    if os.path.exists(chat_history_path):
-        try:
-            os.remove(chat_history_path)
-            print(f"Chat file {chat_history_path} deleted.")
-        except Exception as e:
-            print(f"Error deleting chat file: {e}")
-    else:
-        print(f"Chat file {chat_history_path} does not exist.")
+    def save_chat_history(self, chat_history):
+        chat_history_path = os.path.join(os.getcwd(), self.chat_filename)
+        with open(chat_history_path, 'w') as file:
+            json.dump(chat_history, file, indent=4)
+        ConfigManager.save_config_value('current_chat_filename', self.chat_filename)
 
-def rename_chat_file(old_name, new_name):
-    old_path = os.path.join(os.getcwd(), old_name)
-    new_path = os.path.join(os.getcwd(), new_name)
-    if os.path.exists(old_path):
-        try:
+    def load_chat_history(self):
+        chat_history_path = os.path.join(os.getcwd(), self.chat_filename)
+        if os.path.exists(chat_history_path):
+            try:
+                with open(chat_history_path, 'r') as file:
+                    return json.load(file)
+            except json.JSONDecodeError:
+                return []
+        return []
+
+    def delete_chat_file(self):
+        chat_history_path = os.path.join(os.getcwd(), self.chat_filename)
+        if os.path.exists(chat_history_path):
+            try:
+                os.remove(chat_history_path)
+                print(f"Deleted file: {chat_history_path}")
+            except Exception as e:
+                print(f"Error deleting file {chat_history_path}: {e}")
+        else:
+            print(f"File does not exist: {chat_history_path}")
+
+
+    def rename_chat_file(self, new_name):
+        old_path = os.path.join(os.getcwd(), self.chat_filename)
+        new_path = os.path.join(os.getcwd(), new_name)
+        if os.path.exists(old_path):
             os.rename(old_path, new_path)
-            print(f"Renamed chat file from {old_path} to {new_path}.")
-        except Exception as e:
-            print(f"Error renaming chat file: {e}")
-    else:
-        print(f"Chat file {old_path} does not exist.")
+            self.chat_filename = new_name
+            ConfigManager.save_config_value('current_chat_filename', new_name)
+
+    def set_chat_filename(self, filename):
+        self.chat_filename = filename
+
+    def get_next_available_filename(self):
+        index = 1
+        while True:
+            filename = f"chat_{index}.json"
+            if not os.path.exists(filename):
+                return filename
+            index += 1
 
 class CustomTitleBar(QWidget):
     def __init__(self, parent=None, font_size=14):
@@ -111,7 +106,7 @@ class CustomTitleBar(QWidget):
         self.setStyleSheet("background-color: #333333; color: #00FF00;")
         layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
-        
+
         self.minimize_button = QPushButton("-")
         self.minimize_button.clicked.connect(self.parent.showMinimized)
         self.minimize_button.setFixedSize(30, 30)
@@ -131,7 +126,7 @@ class CustomTitleBar(QWidget):
         layout.addWidget(self.minimize_button)
         layout.addWidget(self.fullscreen_button)
         layout.addWidget(self.close_button)
-        
+
         self.setLayout(layout)
 
     def toggleFullscreen(self):
@@ -157,25 +152,22 @@ class CustomTitleBar(QWidget):
 class Chatbox(QWidget):
     def __init__(self):
         super().__init__()
-        self.config = load_or_create_config()
-        self.font_size = self.config.get("font_size", 14)  # Get the font size from config
-        self.chat_filename = DEFAULT_CHAT_FILENAME
-        self.initUI()
-        self.conversation_history = load_chat_history(self.chat_filename)  # Load the conversation history from file
-        self.command_history = []  # List to store commands
-        self.command_index = -1  # Index to track command history navigation
+        self.config = ConfigManager.load_config()
+        self.chat_manager = ChatHistoryManager(chat_filename=self.config.get('current_chat_filename', 'chat_1.json'))
+        self.font_size = self.config.get("font_size", 14)
+        self.conversation_history = self.chat_manager.load_chat_history()
+        self.command_history = []
+        self.command_index = -1
         self.is_moving = False
         self.startPos = QPoint(0, 0)
-        self.right_button_pressed = False
+        self.welcome_message_displayed = False
+        self.resizing = False
+        self.resize_direction = None
         self.oldPos = QPoint(0, 0)
-        self.resizing = False  # To track if the window is being resized
-        self.resize_direction = None  # To track the direction of resizing
-
-        # Load chat history into the display
+        self.initUI()
         self.load_chat_to_display()
 
     def initUI(self):
-        self.setWindowTitle("Retrochat")
         self.setGeometry(300, 300, 1100, 550)
         self.setWindowFlags(Qt.FramelessWindowHint)
 
@@ -189,7 +181,7 @@ class Chatbox(QWidget):
         self.chat_history = QTextEdit()
         self.chat_history.setReadOnly(True)
         self.chat_history.setFont(QFont("Courier New", self.font_size))
-        self.chat_history.setStyleSheet(f"padding: 10px; background-color: #000000; color: {self.config['user_message_color']};")
+        self.chat_history.setStyleSheet(self.get_chat_style())
 
         self.chat_scroll_area = QScrollArea()
         self.chat_scroll_area.setWidgetResizable(True)
@@ -200,12 +192,12 @@ class Chatbox(QWidget):
         chat_layout.addWidget(self.chat_scroll_area)
 
         self.prompt_label = QLabel(">")
-        self.prompt_label.setStyleSheet(f"color: {self.config['user_message_color']}; font-size: {self.font_size}px; font-family: Courier New; margin: 0; padding: 0;")
+        self.prompt_label.setStyleSheet(self.get_prompt_style())
         self.user_input = QLineEdit()
         self.user_input.setPlaceholderText("Type your message here...")
         self.user_input.returnPressed.connect(self.process_input)
         self.user_input.setFont(QFont("Courier New", self.font_size))
-        self.user_input.setStyleSheet(f"margin: 0; padding: 0; background-color: #000000; color: {self.config['user_message_color']}; border: none;")
+        self.user_input.setStyleSheet(self.get_input_style())
 
         input_layout.addWidget(self.prompt_label, 0, Qt.AlignLeft)
         input_layout.addWidget(self.user_input, 1)
@@ -214,46 +206,48 @@ class Chatbox(QWidget):
         main_layout.addLayout(input_layout)
 
         self.setLayout(main_layout)
-        self.setStyleSheet(f"""
+        self.setStyleSheet(self.get_global_style())
+
+        if not self.conversation_history:
+            self.display_welcome_message()
+
+    def get_global_style(self):
+        return f"""
             QWidget {{
                 background-color: black;
                 color: #00FF00;
                 font-family: 'Courier New', Courier, monospace;
                 font-size: {self.font_size}px;
-            }}
-            QLineEdit {{
-                background-color: black;
-                color: #00FF00;
                 border: none;
-                font-family: 'Courier New', Courier, monospace;
-                margin-top: 13px;
-            }}
-            QTextEdit {{
-                background-color: black;
-                color: #00FF00;
-                border: none;
-                font-family: 'Courier New', Courier, monospace;
             }}
             QScrollBar:vertical {{
-                width: 4px;
-                background: black;
+                width: 10px;
+                background: #222222;
                 margin: 0;
-                border: 1px solid #00FF00;
-                border-radius: 4px;
+                border: none;
             }}
             QScrollBar::handle:vertical {{
                 background: #00FF00;
                 min-height: 20px;
-                border-radius: 4px;
+                border-radius: 5px;
             }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-                height: 0;
-                subcontrol-origin: margin;
+                border: none;
+                background: none;
             }}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
                 background: none;
             }}
-        """)
+        """
+
+    def get_chat_style(self):
+        return f"padding: 10px; background-color: #000000; color: {self.config['user_message_color']};"
+
+    def get_prompt_style(self):
+        return f"color: {self.config['user_message_color']}; font-size: {self.font_size}px; font-family: Courier New; margin: 0; padding: 0;"
+
+    def get_input_style(self):
+        return f"margin: 0; padding: 0; background-color: #000000; color: {self.config['user_message_color']}; border: none;"
 
     def load_chat_to_display(self):
         for message in self.conversation_history:
@@ -267,156 +261,179 @@ class Chatbox(QWidget):
                 self.chat_history.append(assistant_message_html)
         self.chat_history.moveCursor(QTextCursor.End)
 
+    def display_welcome_message(self):
+        welcome_message = """
+        <h3>Welcome to Retrochat!</h3>
+        <p>Here’s a quick guide to help you get started and make the most out of this application.</p>
+        
+        <p><strong>Available Commands:</strong></p>
+
+        <p><strong>/config</strong></p>
+        <p>Customize your chat experience by adjusting various settings.</p>
+        <p><strong>Usage:</strong> <code>/config &lt;key&gt; &lt;value&gt;</code></p>
+        <p><strong>Available Keys:</strong></p>
+        <ul>
+            <li><code>font_size</code>: Adjust the size of the font. Example: <code>/config font_size 18</code></li>
+            <li><code>base_url</code>: Set the base URL for API requests. Example: <code>/config base_url http://new-url.com</code></li>
+            <li><code>host</code>: Define the server host and port. Example: <code>/config host 127.0.0.1:5000</code></li>
+            <li><code>path</code>: Specify the API endpoint path. Example: <code>/config path /v2/chat/completions</code></li>
+            <li><code>user_message_color</code>: Change the color of user messages. Example: <code>/config user_message_color #00FF00</code></li>
+            <li><code>assistant_message_color</code>: Change the color of assistant messages. Example: <code>/config assistant_message_color #FFBF00</code></li>
+        </ul>
+
+        <strong>/chat</strong>
+        <p>Manage your chat sessions.</p>
+        <p><strong>Usage:</strong> <code>/chat &lt;action&gt; &lt;filename&gt; [new_name]</code></p>
+        <p><strong>Available Actions:</strong></p>
+        <ul>
+            <li><code>new &lt;filename&gt;</code>: Create and switch to a new chat file. Example: <code>/chat new my_chat.json</code></li>
+            <li><code>save &lt;filename&gt;</code>: Save the current chat history to a specified file. Example: <code>/chat save my_chat_backup.json</code></li>
+            <li><code>delete &lt;filename&gt;</code>: Permanently delete a specified chat file. Example: <code>/chat delete old_chat.json</code></li>
+            <li><code>reset</code>: Clear the current chat history. Example: <code>/chat reset</code></li>
+            <li><code>rename &lt;old_filename&gt; &lt;new_filename&gt;</code>: Rename a chat file. Example: <code>/chat rename chat_1.json new_chat_name.json</code></li>
+            <li><code>open &lt;filename&gt;</code>: Open and load an existing chat file. Example: <code>/chat open my_chat.json</code></li>
+            <li><code>list</code>: List all JSON chat files in the current directory.</li>
+        </ul>
+
+        <p>Send your first message to start a chat.</p>
+        """
+        self.chat_history.setHtml(welcome_message)
+        self.welcome_message_displayed = True
+
     def process_input(self):
-        user_message = self.user_input.text()
-        if user_message.strip():
+        user_message = self.user_input.text().strip()
+        if user_message:
+            if self.welcome_message_displayed:
+                self.chat_history.clear()
+                self.welcome_message_displayed = False
+                self.chat_manager.save_chat_history([])
+
             if user_message.startswith("/"):
-                self.apply_command(user_message)
-                self.command_history.append(user_message)  # Add command to history
-                self.command_index = -1  # Reset the command index after a new command is entered
+                self.execute_command(user_message)
+                self.command_history.append(user_message)
+                self.command_index = -1
             else:
                 self.send_message(user_message)
             self.user_input.clear()
 
-    def apply_command(self, command):
-        parts = command.split(maxsplit=3)  # Use maxsplit to ensure we capture the entire value part as a single string
+    def execute_command(self, command):
+        parts = command.split(maxsplit=3)
+        commands = {
+            "/config": self.update_config,
+            "/chat": self.manage_chat,
+        }
+        if parts[0] in commands:
+            commands[parts[0]](parts)
+        else:
+            self.display_error(f"Invalid command: {command}")
 
-        if len(parts) == 3 and parts[0] == "/config":
+    def update_config(self, parts):
+        if len(parts) == 3:
             key, value = parts[1], parts[2]
             if key in self.config:
-                current_value = self.config[key]
-                if isinstance(current_value, int):
-                    try:
-                        value = int(value)
-                    except ValueError:
-                        self.chat_history.append(f"<b style='color: red;'>Invalid value for {key}: must be an integer</b>")
-                        self.chat_history.moveCursor(QTextCursor.End)
-                        return
-                elif isinstance(current_value, float):
-                    try:
-                        value = float(value)
-                    except ValueError:
-                        self.chat_history.append(f"<b style='color: red;'>Invalid value for {key}: must be a float</b>")
-                        self.chat_history.moveCursor(QTextCursor.End)
-                        return
-                self.config[key] = value
-                save_config(self.config)
-                self.chat_history.append(f"<b style='color: yellow;'>Configuration updated: {key} = {value}</b>")
-                if key == "font_size":
-                    self.font_size = value
-                    self.update_font_sizes()
+                self.set_config_value(key, value)
             else:
-                self.chat_history.append(f"<b style='color: red;'>Invalid configuration key: {key}</b>")
+                self.display_error(f"Invalid configuration key: {key}")
 
-        elif parts[0] == "/chat":
-            if parts[1] == "new" and len(parts) == 3:
-                self.chat_filename = parts[2]
-                if not self.chat_filename.endswith('.json'):
-                    self.chat_filename += '.json'
-                save_chat_history(self.chat_filename, [])
-                self.open_chat(self.chat_filename)
-                self.chat_history.append(f"<b style='color: yellow;'>New chat {self.chat_filename} created and opened.</b>")
-            elif parts[1] == "save" and len(parts) == 3:
-                self.chat_filename = parts[2]
-                if not self.chat_filename.endswith('.json'):
-                    self.chat_filename += '.json'
-                save_chat_history(self.chat_filename, self.conversation_history)
-                self.chat_history.append(f"<b style='color: yellow;'>Chat saved as {self.chat_filename}.</b>")
-            elif parts[1] == "delete" and len(parts) == 3:
-                delete_chat_file(parts[2])
-                if parts[2] == self.chat_filename:
-                    self.reset_chat()
-                self.chat_history.append(f"<b style='color: yellow;'>Chat file {parts[2]} deleted.</b>")
-            elif parts[1] == "reset" and len(parts) == 2:
+    def manage_chat(self, parts):
+        if len(parts) >= 3:
+            action, filename = parts[1], parts[2]
+            filename = self.ensure_json_extension(filename)
+            
+            print(f"Action: {action}, Filename: {filename}")
+
+            if action == "new":
+                self.chat_manager.chat_filename = filename
+                self.chat_manager.save_chat_history([])  # Save an empty chat history for new chat
+                self.open_chat(filename)
+                self.chat_history.append(f"<b style='color: yellow;'>New chat {filename} created and opened.</b>")
+            elif action == "save":
+                self.chat_manager.chat_filename = filename
+                self.chat_manager.save_chat_history(self.conversation_history)
+                self.chat_history.append(f"<b style='color: yellow;'>Chat saved as {filename}.</b>")
+            elif action == "delete":
+                self.chat_manager.set_chat_filename(filename)
+                print(f"Attempting to delete file: {self.chat_manager.chat_filename}")
+                self.chat_manager.delete_chat_file()
+                
+                chat_history_path = os.path.join(os.getcwd(), self.chat_manager.chat_filename)
+                if not os.path.exists(chat_history_path):
+                    print(f"File {chat_history_path} successfully deleted.")
+                    self.chat_history.append(f"<b style='color: yellow;'>Chat file {filename} deleted.</b>")
+                    # Avoid resetting chat history here, as it would re-create the deleted file
+                else:
+                    self.display_error(f"Failed to delete chat file: {filename}")
+                
+                # Set to the next available filename or reset state
+                self.chat_manager.set_chat_filename(self.chat_manager.get_next_available_filename())
+            elif action == "reset":
                 self.reset_chat()
-            elif parts[1] == "rename" and len(parts) == 4:
-                old_name, new_name = parts[2], parts[3]
-                if not new_name.endswith('.json'):
-                    new_name += '.json'
-                rename_chat_file(old_name, new_name)
-                if old_name == self.chat_filename:
-                    self.chat_filename = new_name
-                    self.open_chat(new_name)
-                self.chat_history.append(f"<b style='color: yellow;'>Chat file {old_name} renamed to {new_name}.</b>")
-            elif parts[1] == "open" and len(parts) == 3:
-                new_chat_filename = parts[2]
-                self.open_chat(new_chat_filename)
+            elif action == "rename" and len(parts) == 4:
+                new_name = self.ensure_json_extension(parts[3])
+                self.chat_manager.rename_chat_file(new_name)
+                self.chat_history.append(f"<b style='color: yellow;'>Chat file renamed to {new_name}.</b>")
+            elif action == "open":
+                self.open_chat(filename)
             else:
-                self.chat_history.append(f"<b style='color: red;'>Invalid chat command: {command}</b>")
+                self.display_error(f"Invalid chat command: {parts[0]} {parts[1]}")
+        elif len(parts) == 2 and parts[1] == "reset":
+            self.reset_chat()
+        elif len(parts) == 2 and parts[1] == "list":
+            self.list_chat_files()
         else:
-            self.chat_history.append(f"<b style='color: red;'>Invalid command: {command}</b>")
+            self.display_error(f"Invalid chat command: {parts[0]}")
+
+
+
+    def list_chat_files(self):
+        json_files = [f for f in os.listdir(os.getcwd()) if f.endswith('.json')]
+        self.chat_history.append("<b style='color: yellow;'>Available chat files:</b>")
+        for file in json_files:
+            self.chat_history.append(f"<b style='color: green;'>{file}</b>")
+        self.chat_history.moveCursor(QTextCursor.End)
+
+    def reset_chat(self):
+        self.conversation_history = []
+        self.chat_history.clear()
+        # Check if the file exists before saving
+        chat_history_path = os.path.join(os.getcwd(), self.chat_manager.chat_filename)
+        if os.path.exists(chat_history_path):
+            self.chat_manager.save_chat_history(self.conversation_history)
+            print("Chat history has been reset and saved.")
+        else:
+            print("Chat history reset but not saved as the file does not exist.")
+        
+        self.chat_history.append(f"<b style='color: yellow;'>Chat history has been reset.</b>")
         self.chat_history.moveCursor(QTextCursor.End)
 
     def open_chat(self, chat_filename):
-        """Open a specified chat file and load its history."""
-        self.chat_filename = chat_filename
-        self.conversation_history = load_chat_history(chat_filename)
+        self.chat_manager.chat_filename = chat_filename
+        self.conversation_history = self.chat_manager.load_chat_history()
         self.chat_history.clear()
         self.load_chat_to_display()
         self.chat_history.append(f"<b style='color: yellow;'>Chat {chat_filename} opened.</b>")
+        ConfigManager.save_config_value('current_chat_filename', chat_filename)
 
-    def reset_chat(self):
-        """Clear the current chat history."""
-        self.conversation_history = []
-        self.chat_history.clear()
-        save_chat_history(self.chat_filename, self.conversation_history)
-        self.chat_history.append(f"<b style='color: yellow;'>Chat history has been reset.</b>")
-
+    def ensure_json_extension(self, filename):
+        if not filename.endswith('.json'):
+            filename += '.json'
+        return filename
 
     def update_font_sizes(self):
         self.chat_history.setFont(QFont("Courier New", self.font_size))
         self.user_input.setFont(QFont("Courier New", self.font_size))
         self.prompt_label.setStyleSheet(f"color: {self.config['user_message_color']}; font-size: {self.font_size}px; font-family: Courier New; margin: 0; padding: 0;")
 
-        self.setStyleSheet(f"""
-            QWidget {{
-                background-color: black;
-                color: #00FF00;
-                font-family: 'Courier New', Courier, monospace;
-                font-size: {self.font_size}px;
-            }}
-            QLineEdit {{
-                background-color: black;
-                color: #00FF00;
-                border: none;
-                font-family: 'Courier New', Courier, monospace;
-                margin-top: 13px;
-            }}
-            QTextEdit {{
-                background-color: black;
-                color: #00FF00;
-                border: none;
-                font-family: 'Courier New', Courier, monospace;
-            }}
-            QScrollBar:vertical {{
-                width: 4px;
-                background: black;
-                margin: 0;
-                border: 1px solid #00FF00;
-                border-radius: 4px;
-            }}
-            QScrollBar::handle:vertical {{
-                background: #00FF00;
-                min-height: 20px;
-                border-radius: 4px;
-            }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-                height: 0;
-                subcontrol-origin: margin;
-            }}
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
-                background: none;
-            }}
-        """)
-
     def send_message(self, user_message):
         user_message_html = markdown.markdown(user_message, extensions=['tables', 'fenced_code'])
         user_message_html = self.apply_custom_css(user_message_html, role="user")
+        
         self.chat_history.append(user_message_html)
-
+        self.chat_history.moveCursor(QTextCursor.End)
+        
         self.conversation_history.append({"role": "user", "content": user_message})
-        save_chat_history(self.chat_filename, self.conversation_history)
-
+        self.chat_manager.save_chat_history(self.conversation_history)
+        
         full_endpoint = f"{self.config['base_url']}{self.config['host']}{self.config['path']}"
         self.worker = NetworkWorker(self.conversation_history, full_endpoint)
         self.worker.response_received.connect(self.handle_response)
@@ -425,7 +442,7 @@ class Chatbox(QWidget):
 
     def handle_response(self, response):
         self.conversation_history.append({"role": "assistant", "content": response})
-        save_chat_history(self.chat_filename, self.conversation_history)
+        self.chat_manager.save_chat_history(self.conversation_history)
 
         response_html = markdown.markdown(response, extensions=['tables', 'fenced_code'])
         response_html = self.apply_custom_css(response_html, role="assistant")
@@ -511,7 +528,7 @@ class Chatbox(QWidget):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Up:
             if self.command_history:
-                if self.command_index == -1:  # First time pressing up, start from the last command
+                if self.command_index == -1:
                     self.command_index = len(self.command_history) - 1
                 else:
                     self.command_index = max(0, self.command_index - 1)
@@ -523,9 +540,9 @@ class Chatbox(QWidget):
                     self.user_input.setText(self.command_history[self.command_index])
                 else:
                     self.user_input.clear()
-                    self.command_index = -1  # Reset to the initial state
+                    self.command_index = -1
         else:
-            super().keyPressEvent(event)  # Handle other keys normally
+            super().keyPressEvent(event)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -561,7 +578,7 @@ class Chatbox(QWidget):
             self.oldPos = event.globalPos()
 
     def is_on_border(self, pos):
-        margin = 10  # Sensitivity for border resizing
+        margin = 10
         rect = self.rect()
         bottom_right = QRect(rect.right() - margin, rect.bottom() - margin, margin, margin)
         bottom = QRect(rect.left(), rect.bottom() - margin, rect.width(), margin)
@@ -599,20 +616,12 @@ class NetworkWorker(QThread):
         }
 
         try:
-            response = requests.post(
-                self.endpoint,
-                headers=headers,
-                json=data
-            )
-
-            if response.status_code != 200:
-                error_message = f"{response.status_code} - {response.text}"
-                self.error_occurred.emit(error_message)
-                return
-
-            bot_message = response.json()["choices"][0]["message"]["content"].strip()
-            self.response_received.emit(bot_message)
-
+            response = requests.post(self.endpoint, headers=headers, json=data)
+            if response.status_code == 200:
+                bot_message = response.json()["choices"][0]["message"]["content"].strip()
+                self.response_received.emit(bot_message)
+            else:
+                self.error_occurred.emit(f"{response.status_code} - {response.text}")
         except requests.RequestException as e:
             self.error_occurred.emit(str(e))
 

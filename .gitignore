@@ -24,3 +24,4 @@ build/retrochat/COLLECT-00.toc
 build/retrochat/retrochat.exe
 dist/
 
+config.json

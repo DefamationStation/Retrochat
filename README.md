@@ -1,7 +1,7 @@
 # Retrochat
 a simple light chatbox app that lets you use your local llama.cpp server. screenshots below.
 
-documentatio link: https://github.com/DefamationStation/Retrochat/wiki
+make sure to read for detailed commands: https://github.com/DefamationStation/Retrochat/wiki
 
 discord link: https://discord.gg/dZxjYNyNth
 

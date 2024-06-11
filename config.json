@@ -1,6 +1,6 @@
 {
     "base_url": "http://",
-    "host": "192.168.1.82:8080",
+    "host": "127.0.0.1:8080",
     "path": "/v1/chat/completions",
     "user_message_color": "#00FF00",
     "assistant_message_color": "#FFBF00",

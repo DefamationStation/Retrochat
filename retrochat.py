@@ -309,8 +309,17 @@ class Chatbox(QWidget):
                 self.chat_history.append(f"<b style='color: red;'>Invalid configuration key: {key}</b>")
 
         elif parts[0] == "/chat":
-            if parts[1] == "save" and len(parts) == 3:
+            if parts[1] == "new" and len(parts) == 3:
                 self.chat_filename = parts[2]
+                if not self.chat_filename.endswith('.json'):
+                    self.chat_filename += '.json'
+                save_chat_history(self.chat_filename, [])
+                self.open_chat(self.chat_filename)
+                self.chat_history.append(f"<b style='color: yellow;'>New chat {self.chat_filename} created and opened.</b>")
+            elif parts[1] == "save" and len(parts) == 3:
+                self.chat_filename = parts[2]
+                if not self.chat_filename.endswith('.json'):
+                    self.chat_filename += '.json'
                 save_chat_history(self.chat_filename, self.conversation_history)
                 self.chat_history.append(f"<b style='color: yellow;'>Chat saved as {self.chat_filename}.</b>")
             elif parts[1] == "delete" and len(parts) == 3:
@@ -322,6 +331,8 @@ class Chatbox(QWidget):
                 self.reset_chat()
             elif parts[1] == "rename" and len(parts) == 4:
                 old_name, new_name = parts[2], parts[3]
+                if not new_name.endswith('.json'):
+                    new_name += '.json'
                 rename_chat_file(old_name, new_name)
                 if old_name == self.chat_filename:
                     self.chat_filename = new_name

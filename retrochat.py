@@ -7,8 +7,8 @@ from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLine
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint, QRect
 from PyQt5.QtGui import QTextCursor, QFont
 
+DEFAULT_CHAT_FILENAME = "chat_1.json"  # Default chat file
 CONFIG_FILENAME = "config.json"
-CHAT_HISTORY_FILENAME = "chat_history.json"
 DEFAULT_CONFIG = {
     "base_url": "http://",
     "host": "127.0.0.1:8080",
@@ -51,8 +51,8 @@ def save_config(config):
     except Exception as e:
         print(f"Error saving config file: {e}")
 
-def save_chat_history(chat_history):
-    chat_history_path = os.path.join(os.getcwd(), CHAT_HISTORY_FILENAME)
+def save_chat_history(chat_filename, chat_history):
+    chat_history_path = os.path.join(os.getcwd(), chat_filename)
     try:
         with open(chat_history_path, 'w') as chat_history_file:
             json.dump(chat_history, chat_history_file, indent=4)
@@ -60,8 +60,8 @@ def save_chat_history(chat_history):
     except Exception as e:
         print(f"Error saving chat history: {e}")
 
-def load_chat_history():
-    chat_history_path = os.path.join(os.getcwd(), CHAT_HISTORY_FILENAME)
+def load_chat_history(chat_filename):
+    chat_history_path = os.path.join(os.getcwd(), chat_filename)
     if os.path.exists(chat_history_path):
         try:
             with open(chat_history_path, 'r') as chat_history_file:
@@ -75,6 +75,29 @@ def load_chat_history():
             print(f"Unexpected error: {e}")
             return []
     return []
+
+def delete_chat_file(chat_filename):
+    chat_history_path = os.path.join(os.getcwd(), chat_filename)
+    if os.path.exists(chat_history_path):
+        try:
+            os.remove(chat_history_path)
+            print(f"Chat file {chat_history_path} deleted.")
+        except Exception as e:
+            print(f"Error deleting chat file: {e}")
+    else:
+        print(f"Chat file {chat_history_path} does not exist.")
+
+def rename_chat_file(old_name, new_name):
+    old_path = os.path.join(os.getcwd(), old_name)
+    new_path = os.path.join(os.getcwd(), new_name)
+    if os.path.exists(old_path):
+        try:
+            os.rename(old_path, new_path)
+            print(f"Renamed chat file from {old_path} to {new_path}.")
+        except Exception as e:
+            print(f"Error renaming chat file: {e}")
+    else:
+        print(f"Chat file {old_path} does not exist.")
 
 class CustomTitleBar(QWidget):
     def __init__(self, parent=None, font_size=14):
@@ -136,8 +159,9 @@ class Chatbox(QWidget):
         super().__init__()
         self.config = load_or_create_config()
         self.font_size = self.config.get("font_size", 14)  # Get the font size from config
+        self.chat_filename = DEFAULT_CHAT_FILENAME
         self.initUI()
-        self.conversation_history = load_chat_history()  # Load the conversation history from file
+        self.conversation_history = load_chat_history(self.chat_filename)  # Load the conversation history from file
         self.command_history = []  # List to store commands
         self.command_index = -1  # Index to track command history navigation
         self.is_moving = False
@@ -256,9 +280,9 @@ class Chatbox(QWidget):
 
     def apply_command(self, command):
         parts = command.split(maxsplit=3)  # Use maxsplit to ensure we capture the entire value part as a single string
+
         if len(parts) == 3 and parts[0] == "/config":
             key, value = parts[1], parts[2]
-
             if key in self.config:
                 current_value = self.config[key]
                 if isinstance(current_value, int):
@@ -275,28 +299,58 @@ class Chatbox(QWidget):
                         self.chat_history.append(f"<b style='color: red;'>Invalid value for {key}: must be a float</b>")
                         self.chat_history.moveCursor(QTextCursor.End)
                         return
-
                 self.config[key] = value
                 save_config(self.config)
                 self.chat_history.append(f"<b style='color: yellow;'>Configuration updated: {key} = {value}</b>")
-                
                 if key == "font_size":
                     self.font_size = value
                     self.update_font_sizes()
-
             else:
                 self.chat_history.append(f"<b style='color: red;'>Invalid configuration key: {key}</b>")
-        elif command.strip() == "/reset chat":
-            self.reset_chat()
+
+        elif parts[0] == "/chat":
+            if parts[1] == "save" and len(parts) == 3:
+                self.chat_filename = parts[2]
+                save_chat_history(self.chat_filename, self.conversation_history)
+                self.chat_history.append(f"<b style='color: yellow;'>Chat saved as {self.chat_filename}.</b>")
+            elif parts[1] == "delete" and len(parts) == 3:
+                delete_chat_file(parts[2])
+                if parts[2] == self.chat_filename:
+                    self.reset_chat()
+                self.chat_history.append(f"<b style='color: yellow;'>Chat file {parts[2]} deleted.</b>")
+            elif parts[1] == "reset" and len(parts) == 2:
+                self.reset_chat()
+            elif parts[1] == "rename" and len(parts) == 4:
+                old_name, new_name = parts[2], parts[3]
+                rename_chat_file(old_name, new_name)
+                if old_name == self.chat_filename:
+                    self.chat_filename = new_name
+                    self.open_chat(new_name)
+                self.chat_history.append(f"<b style='color: yellow;'>Chat file {old_name} renamed to {new_name}.</b>")
+            elif parts[1] == "open" and len(parts) == 3:
+                new_chat_filename = parts[2]
+                self.open_chat(new_chat_filename)
+            else:
+                self.chat_history.append(f"<b style='color: red;'>Invalid chat command: {command}</b>")
         else:
             self.chat_history.append(f"<b style='color: red;'>Invalid command: {command}</b>")
         self.chat_history.moveCursor(QTextCursor.End)
 
+    def open_chat(self, chat_filename):
+        """Open a specified chat file and load its history."""
+        self.chat_filename = chat_filename
+        self.conversation_history = load_chat_history(chat_filename)
+        self.chat_history.clear()
+        self.load_chat_to_display()
+        self.chat_history.append(f"<b style='color: yellow;'>Chat {chat_filename} opened.</b>")
+
     def reset_chat(self):
+        """Clear the current chat history."""
         self.conversation_history = []
         self.chat_history.clear()
-        save_chat_history(self.conversation_history)
+        save_chat_history(self.chat_filename, self.conversation_history)
         self.chat_history.append(f"<b style='color: yellow;'>Chat history has been reset.</b>")
+
 
     def update_font_sizes(self):
         self.chat_history.setFont(QFont("Courier New", self.font_size))
@@ -350,7 +404,7 @@ class Chatbox(QWidget):
         self.chat_history.append(user_message_html)
 
         self.conversation_history.append({"role": "user", "content": user_message})
-        save_chat_history(self.conversation_history)
+        save_chat_history(self.chat_filename, self.conversation_history)
 
         full_endpoint = f"{self.config['base_url']}{self.config['host']}{self.config['path']}"
         self.worker = NetworkWorker(self.conversation_history, full_endpoint)
@@ -360,7 +414,7 @@ class Chatbox(QWidget):
 
     def handle_response(self, response):
         self.conversation_history.append({"role": "assistant", "content": response})
-        save_chat_history(self.conversation_history)
+        save_chat_history(self.chat_filename, self.conversation_history)
 
         response_html = markdown.markdown(response, extensions=['tables', 'fenced_code'])
         response_html = self.apply_custom_css(response_html, role="assistant")

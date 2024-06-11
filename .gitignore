@@ -1,6 +1,7 @@
 venv/
 .env
 .aider*
+*.json
 retrochat.spec
 build/retrochat/Analysis-00.toc
 build/retrochat/base_library.zip

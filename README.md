@@ -13,7 +13,7 @@ download the .exe and run anywhere.
 
 
 
-type '/config host <your host ip and port here>' to change the llama.cpp endpoint server.
+type '/config host (your host ip and port here)' to change the llama.cpp endpoint server.
 
 any value that exists in the config.json can be changed the same way.
 

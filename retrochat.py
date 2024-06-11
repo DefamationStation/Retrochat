@@ -14,7 +14,7 @@ DEFAULT_CONFIG = {
     "path": "/v1/chat/completions",
     "user_message_color": "#00FF00",
     "assistant_message_color": "#FFBF00",
-    "font_size": 14
+    "font_size": 20
 }
 
 def load_or_create_config():

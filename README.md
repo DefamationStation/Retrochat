@@ -21,6 +21,6 @@ any value that exists in the config.json can be changed the same way.
 
 ![image](https://github.com/DefamationStation/Retrochat/assets/82258900/f9f9cfa9-e81e-4d3a-963a-6e7eeb3f90d9)
 
-![Untitled design](https://github.com/DefamationStation/Retrochat/assets/82258900/28e6a958-4842-46e1-beca-91d300286856)
+![app_window_man-ezgif com-video-to-gif-converter](https://github.com/DefamationStation/Retrochat/assets/82258900/0e0b9b75-3c21-4c94-83ae-e22a0e34fe84)
 
 box can be resized by click and dragging near the edges of the app on bottom right corner

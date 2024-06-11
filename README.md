@@ -21,6 +21,6 @@ any value that exists in the config.json can be changed the same way.
 
 ![image](https://github.com/DefamationStation/Retrochat/assets/82258900/f9f9cfa9-e81e-4d3a-963a-6e7eeb3f90d9)
 
-![Untitled design](https://github.com/DefamationStation/Retrochat/assets/82258900/5b5d7810-4a90-459a-92ab-450a8d24fb5f)
+![Untitled design](https://github.com/DefamationStation/Retrochat/assets/82258900/28e6a958-4842-46e1-beca-91d300286856)
 
 box can be resized by click and dragging near the edges of the app on bottom right corner

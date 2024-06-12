@@ -287,7 +287,7 @@ class Chatbox(QWidget):
                 else:
                     self.display_error("Usage: /config <key> <value>")
             else:
-                parts = command.split(maxsplit(2))
+                parts = command.split(maxsplit=2)
                 commands[command_key](parts)
         else:
             self.display_error(f"Invalid command: {command}")

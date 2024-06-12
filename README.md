@@ -2,7 +2,7 @@
 
 ## Overview
 
-Retrochat is a simple and lightweight chatbox application running a **single .py** that leverages your local [llama.cpp](https://github.com/ggerganov/llama.cpp),[Kobolt.cpp](https://github.com/LostRuins/koboldcpp) or [https://ollama.com/](Ollama)  server.  This app is designed for easy configuration and seamless communication through a classic chat interface.
+Retrochat is a simple and lightweight chatbox application running a **single .py** that leverages your local [llama.cpp](https://github.com/ggerganov/llama.cpp), [Kobolt.cpp](https://github.com/LostRuins/koboldcpp) or [https://ollama.com/](Ollama)  server.  This app is designed for easy configuration and seamless communication through a classic chat interface.
 
 ![image](https://github.com/DefamationStation/Retrochat/assets/82258900/e3609f2f-779d-4609-b60e-450ced1ca64f)
 

@@ -3,20 +3,22 @@ import sys
 import json
 import requests
 import markdown
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QScrollArea, QHBoxLayout, QFrame, QLabel, QPushButton
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QScrollArea, QHBoxLayout, QFrame, QLabel, QPushButton, QComboBox, QMessageBox
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint, QRect
 from PyQt5.QtGui import QTextCursor, QFont
 
+# ConfigManager class (unchanged)
 class ConfigManager:
     CONFIG_FILENAME = "config.json"
     DEFAULT_CONFIG = {
         "base_url": "http://",
-        "host": "127.0.0.1:8080",
+        "ollama_host": "127.0.0.1:11434",
         "path": "/v1/chat/completions",
         "user_message_color": "#00FF00",
         "assistant_message_color": "#FFBF00",
         "font_size": 18,
-        "current_chat_filename": "chat_2.json"
+        "current_chat_filename": "chat_1.json",
+        "selected_model": None
     }
 
     @classmethod
@@ -43,8 +45,9 @@ class ConfigManager:
         config[key] = value
         cls.save_config(config)
 
+# ChatHistoryManager class (unchanged)
 class ChatHistoryManager:
-    def __init__(self, chat_filename="chat_2.json"):
+    def __init__(self, chat_filename="chat_1.json"):
         self.chat_filename = chat_filename
 
     def save_chat_history(self, chat_history):
@@ -68,8 +71,11 @@ class ChatHistoryManager:
         if os.path.exists(chat_history_path):
             try:
                 os.remove(chat_history_path)
+                print(f"Deleted file: {chat_history_path}")
             except Exception as e:
                 print(f"Error deleting file {chat_history_path}: {e}")
+        else:
+            print(f"File does not exist: {chat_history_path}")
 
     def rename_chat_file(self, new_name):
         old_path = os.path.join(os.getcwd(), self.chat_filename)
@@ -90,6 +96,7 @@ class ChatHistoryManager:
                 return filename
             index += 1
 
+# CustomTitleBar class (unchanged)
 class CustomTitleBar(QWidget):
     def __init__(self, parent=None, font_size=14):
         super().__init__(parent)
@@ -145,23 +152,60 @@ class CustomTitleBar(QWidget):
     def mouseReleaseEvent(self, event):
         self.parent.is_moving = False
 
+# Chatbox class
 class Chatbox(QWidget):
     def __init__(self):
         super().__init__()
         self.config = ConfigManager.load_config()
-        self.chat_manager = ChatHistoryManager(chat_filename=self.config.get('current_chat_filename', 'chat_2.json'))
+        self.chat_manager = ChatHistoryManager(chat_filename=self.config.get('current_chat_filename', 'chat_1.json'))
         self.font_size = self.config.get("font_size", 14)
         self.conversation_history = self.chat_manager.load_chat_history()
         self.command_history = []
         self.command_index = -1
         self.is_moving = False
         self.startPos = QPoint(0, 0)
-        self.welcome_message_displayed = False
+        self.help_message_displayed = False
         self.resizing = False
         self.resize_direction = None
         self.oldPos = QPoint(0, 0)
+        self.selected_model = self.config.get('selected_model')  # Load the selected model from config
+        self.available_models = []  
         self.initUI()
-        self.load_chat_to_display()
+
+        if self.server_is_reachable():
+            if not self.selected_model:
+                self.prompt_model_selection()
+            else:
+                self.load_chat_to_display()
+        else:
+            self.display_error("Server is not reachable. Please check the configuration.")
+
+    def server_is_reachable(self):
+        try:
+            base_url = self.config.get("base_url", "http://")
+            host = self.config.get("ollama_host", "127.0.0.1:11434")
+            full_url = base_url + host
+            response = requests.get(f"{full_url}/api/tags")
+            return response.status_code == 200
+        except requests.RequestException:
+            return False
+
+    def prompt_model_selection(self):
+        self.load_models_from_ollama()
+        if self.available_models:
+            dialog = ModelSelectionDialog(self.available_models)
+            if dialog.exec_():
+                selected_model = dialog.get_selected_model()
+                self.selected_model = selected_model
+                ConfigManager.save_config_value('selected_model', selected_model)
+                self.chat_history.clear()
+                self.load_chat_to_display()
+        else:
+            self.display_error("No models available to select.")
+
+    def display_error(self, message):
+        self.chat_history.append(f"<b style='color: red;'>Error:</b> {message}")
+        self.chat_history.moveCursor(QTextCursor.End)
 
     def initUI(self):
         self.setGeometry(300, 300, 1100, 550)
@@ -204,8 +248,8 @@ class Chatbox(QWidget):
         self.setLayout(main_layout)
         self.setStyleSheet(self.get_global_style())
 
-        if not self.conversation_history:
-            self.display_welcome_message()
+        if not self.conversation_history and not self.selected_model:
+            self.display_help_message()
 
     def get_global_style(self):
         return f"""
@@ -257,8 +301,8 @@ class Chatbox(QWidget):
                 self.chat_history.append(assistant_message_html)
         self.chat_history.moveCursor(QTextCursor.End)
 
-    def display_welcome_message(self):
-        welcome_message = """
+    def display_help_message(self):
+        help_message = """
         <h3>Welcome to Retrochat!</h3>
         <p>Here’s a quick guide to help you get started and make the most out of this application.</p>
         
@@ -290,18 +334,21 @@ class Chatbox(QWidget):
             <li><code>open &lt;filename&gt;</code>: Open and load an existing chat file. Example: <code>/chat open my_chat.json</code></li>
             <li><code>list</code>: List all JSON chat files in the current directory.</li>
         </ul>
+        
+        <strong>/models</strong>
+        <p>List available models from Ollama.</p>
 
-        <p>Send your first message to start a chat.</p>
+        <strong>/models</strong>
         """
-        self.chat_history.setHtml(welcome_message)
-        self.welcome_message_displayed = True
+        self.chat_history.setHtml(help_message)
+        self.help_message_displayed = True
 
     def process_input(self):
         user_message = self.user_input.text().strip()
         if user_message:
-            if self.welcome_message_displayed:
+            if self.help_message_displayed:
                 self.chat_history.clear()
-                self.welcome_message_displayed = False
+                self.help_message_displayed = False
                 self.chat_manager.save_chat_history([])
 
             if user_message.startswith("/"):
@@ -317,65 +364,40 @@ class Chatbox(QWidget):
         commands = {
             "/config": self.update_config,
             "/chat": self.manage_chat,
+            "/models": self.list_models,
+            "/select_model": self.select_model,
+            "/help": self.display_help_message,
         }
         if parts[0] in commands:
-            commands[parts[0]](parts)
+            if parts[0] == "/help":
+                commands[parts[0]]()  # Call display_help_message without arguments
+            else:
+                commands[parts[0]](parts)
         else:
             self.display_error(f"Invalid command: {command}")
+
 
     def update_config(self, parts):
         if len(parts) == 3:
             key, value = parts[1], parts[2]
             if key in self.config:
-                # Ensure the correct type is used for each config key
-                if key == "font_size":
-                    value = int(value)  # Convert to integer
-                # Update the configuration
                 ConfigManager.save_config_value(key, value)
-                # Reload the configuration to get the updated values
-                self.config = ConfigManager.load_config()
-                self.apply_config_changes(key)
+                self.config[key] = value  # Update the local config
+                if key == "font_size":
+                    self.font_size = int(value)
+                    self.update_font_sizes()
+                self.chat_history.append(f"<b style='color: yellow;'>Config updated: {key} = {value}</b>")
             else:
                 self.display_error(f"Invalid configuration key: {key}")
-        else:
-            self.display_error(f"Usage: /config <key> <value>")
-
-    def apply_config_changes(self, key):
-        if key == "font_size":
-            self.font_size = self.config["font_size"]
-            self.update_font_sizes()
-        elif key in ["user_message_color", "assistant_message_color"]:
-            self.chat_history.setStyleSheet(self.get_chat_style())
-            self.prompt_label.setStyleSheet(self.get_prompt_style())
-            self.user_input.setStyleSheet(self.get_input_style())
-        else:
-            self.chat_history.setStyleSheet(self.get_global_style())
-
-    def update_font_sizes(self):
-        # Update the font size of various UI components to reflect the new setting
-        self.chat_history.setFont(QFont("Courier New", self.font_size))
-        self.user_input.setFont(QFont("Courier New", self.font_size))
-        self.prompt_label.setStyleSheet(f"color: {self.config['user_message_color']}; font-size: {self.font_size}px; font-family: Courier New; margin: 0; padding: 0;")
-
-        # Apply global style again in case other elements need font size update
-        self.setStyleSheet(self.get_global_style())
-
-        # Refresh the chat display to use the updated font size
-        self.load_chat_to_display()
-
-        # Ensure the chat layout reflects the new font size immediately
-        self.chat_scroll_area.setWidget(self.chat_history)
-        self.chat_scroll_area.updateGeometry()
-        self.chat_history.updateGeometry()
 
     def manage_chat(self, parts):
         if len(parts) >= 3:
             action, filename = parts[1], parts[2]
             filename = self.ensure_json_extension(filename)
-
+            
             if action == "new":
                 self.chat_manager.chat_filename = filename
-                self.chat_manager.save_chat_history([])
+                self.chat_manager.save_chat_history([])  # Save an empty chat history for new chat
                 self.open_chat(filename)
                 self.chat_history.append(f"<b style='color: yellow;'>New chat {filename} created and opened.</b>")
             elif action == "save":
@@ -420,10 +442,14 @@ class Chatbox(QWidget):
     def reset_chat(self):
         self.conversation_history = []
         self.chat_history.clear()
+        # Check if the file exists before saving
         chat_history_path = os.path.join(os.getcwd(), self.chat_manager.chat_filename)
         if os.path.exists(chat_history_path):
             self.chat_manager.save_chat_history(self.conversation_history)
-        self.chat_history.append(f"<b style='color: yellow;'>Chat history has been reset.</b>")
+            self.chat_history.append(f"<b style='color: yellow;'>Chat history has been reset.</b>")
+        else:
+            self.chat_history.append(f"<b style='color: yellow;'>Chat history reset but not saved as the file does not exist.</b>")
+        
         self.chat_history.moveCursor(QTextCursor.End)
 
     def open_chat(self, chat_filename):
@@ -439,6 +465,11 @@ class Chatbox(QWidget):
             filename += '.json'
         return filename
 
+    def update_font_sizes(self):
+        self.chat_history.setFont(QFont("Courier New", self.font_size))
+        self.user_input.setFont(QFont("Courier New", self.font_size))
+        self.prompt_label.setStyleSheet(f"color: {self.config['user_message_color']}; font-size: {self.font_size}px; font-family: Courier New; margin: 0; padding: 0;")
+
     def send_message(self, user_message):
         user_message_html = markdown.markdown(user_message, extensions=['tables', 'fenced_code'])
         user_message_html = self.apply_custom_css(user_message_html, role="user")
@@ -449,11 +480,21 @@ class Chatbox(QWidget):
         self.conversation_history.append({"role": "user", "content": user_message})
         self.chat_manager.save_chat_history(self.conversation_history)
         
-        full_endpoint = f"{self.config['base_url']}{self.config['host']}{self.config['path']}"
-        self.worker = NetworkWorker(self.conversation_history, full_endpoint)
+        full_endpoint = f"{self.config['base_url']}{self.config['ollama_host']}{self.config['path']}"
+        if self.selected_model:
+            data = {
+                "model": self.selected_model,
+                "messages": self.conversation_history
+            }
+        else:
+            self.display_error("No model selected. Please select a model using /select_model <model_name>")
+            return
+        
+        self.worker = NetworkWorker(self.conversation_history, full_endpoint, data)
         self.worker.response_received.connect(self.handle_response)
         self.worker.error_occurred.connect(self.handle_error)
         self.worker.start()
+
 
     def handle_response(self, response):
         self.conversation_history.append({"role": "assistant", "content": response})
@@ -612,26 +653,61 @@ class Chatbox(QWidget):
             return 'right'
         return None
 
+    def load_models_from_ollama(self):
+        try:
+            base_url = self.config.get("base_url", "http://")
+            host = self.config.get("ollama_host", "127.0.0.1:11434")
+            full_url = base_url + host
+            response = requests.get(f"{full_url}/api/tags")
+            response.raise_for_status()
+            models_info = response.json()
+            self.available_models = models_info.get("models", [])
+        except requests.RequestException as e:
+            self.chat_history.append(f"<b style='color: red;'>Error fetching models from Ollama: {e}</b>")
+
+    def display_models_list(self):
+        if self.available_models:
+            self.chat_history.append("<b style='color: yellow;'>Available models:</b>")
+            for model in self.available_models:
+                self.chat_history.append(f"<b style='color: green;'>/select_model {model['name']}</b>")
+            self.chat_history.append("<b style='color: yellow;'>You can copy and paste the above commands to select a model.</b>")
+        else:
+            self.chat_history.append("<b style='color: yellow;'>No available models found.</b>")
+        self.chat_history.moveCursor(QTextCursor.End)
+
+    def list_models(self, parts):
+        self.display_models_list()
+
+    def select_model(self, parts):
+        if len(parts) == 2:
+            model_name = parts[1]
+            matching_model = next((model for model in self.available_models if model["name"] == model_name), None)
+            if matching_model:
+                self.selected_model = model_name
+                ConfigManager.save_config_value('selected_model', model_name)
+                self.chat_history.append(f"<b style='color: yellow;'>Selected model: {model_name}</b>")
+            else:
+                self.display_error(f"Model {model_name} not found in the available models.")
+        else:
+            self.display_error("Usage: /select_model model_name")
+
 class NetworkWorker(QThread):
     response_received = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
 
-    def __init__(self, conversation_history, endpoint):
+    def __init__(self, conversation_history, endpoint, data):
         super().__init__()
         self.conversation_history = conversation_history
         self.endpoint = endpoint
+        self.data = data
 
     def run(self):
-        data = {
-            "model": "gpt-3.5-turbo",
-            "messages": self.conversation_history
-        }
         headers = {
             "Content-Type": "application/json"
         }
 
         try:
-            response = requests.post(self.endpoint, headers=headers, json=data)
+            response = requests.post(self.endpoint, headers=headers, json=self.data)
             if response.status_code == 200:
                 bot_message = response.json()["choices"][0]["message"]["content"].strip()
                 self.response_received.emit(bot_message)
@@ -639,6 +715,32 @@ class NetworkWorker(QThread):
                 self.error_occurred.emit(f"{response.status_code} - {response.text}")
         except requests.RequestException as e:
             self.error_occurred.emit(str(e))
+
+class ModelSelectionDialog(QMessageBox):
+    def __init__(self, models, parent=None):
+        super().__init__(parent)
+        self.models = models
+        self.selected_model = None
+        self.setWindowTitle("Select Model")
+        self.setText("Please select a model to use:")
+        self.setIcon(QMessageBox.Information)
+
+        combo = QComboBox(self)
+        for model in models:
+            combo.addItem(model["name"])
+
+        self.layout().addWidget(combo, 1, 1)
+        self.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+        self.combo = combo
+
+        self.buttonClicked.connect(self.on_button_clicked)
+
+    def on_button_clicked(self, button):
+        if button.text() == "OK":
+            self.selected_model = self.combo.currentText()
+
+    def get_selected_model(self):
+        return self.selected_model
 
 if __name__ == "__main__":
     app = QApplication([])

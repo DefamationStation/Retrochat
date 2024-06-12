@@ -515,7 +515,7 @@ class Chatbox(QWidget):
             self.display_error(f"Invalid chat command: {parts[0]}")
 
     def list_chat_files(self):
-        json_files = [f for f in os.listdir(os.getcwd()) if f.endswith('.json')]
+        json_files = [f for f in os.listdir(os.getcwd()) if f.endswith('.json') and f != 'config.json']
         self.chat_history.append("<b style='color: yellow;'>Available chat files:</b>")
         for file in json_files:
             self.chat_history.append(f"<b style='color: green;'>{file}</b>")

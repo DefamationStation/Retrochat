@@ -3,6 +3,8 @@
 ## Overview
 Retrochat is a simple and lightweight chatbox application that leverages your local [llama.cpp](https://github.com/ggerganov/llama.cpp) server. This app is designed for easy configuration and seamless communication through a classic chat interface.
 
+**Please note:** Llama.cpp or any sort of inference isn't included with this app, you will need to run your own server.
+
 ## Development
 This application is being actively developed using [Aider](https://aider.chat/),
 

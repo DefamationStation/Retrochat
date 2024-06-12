@@ -406,7 +406,7 @@ class Chatbox(QWidget):
         """
 
     def get_chat_style(self):
-        return f"padding: 10px; background-color: #000000; color: {self.config['user_message_color']};"
+        return f"padding: 5px; background-color: #000000; color: {self.config['user_message_color']};"
 
     def get_prompt_style(self):
         return f"color: {self.config['user_message_color']}; font-size: {self.font_size}px; font-family: Courier New; margin: 0; padding: 0;"

@@ -7,7 +7,6 @@ from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLine
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint, QRect
 from PyQt5.QtGui import QTextCursor, QFont
 
-# ConfigManager class (unchanged)
 class ConfigManager:
     CONFIG_FILENAME = "config.json"
     DEFAULT_CONFIG = {
@@ -20,10 +19,8 @@ class ConfigManager:
         "font_size": 18,
         "current_chat_filename": "chat_1.json",
         "selected_model": "",
-        "current_mode": "llama.cpp",
-        "system_prompt": ""
+        "current_mode": "llama.cpp"
     }
-
 
     @classmethod
     def load_config(cls):
@@ -49,15 +46,18 @@ class ConfigManager:
         config[key] = value
         cls.save_config(config)
 
-# ChatHistoryManager class (unchanged)
 class ChatHistoryManager:
     def __init__(self, chat_filename="chat_1.json"):
         self.chat_filename = chat_filename
 
-    def save_chat_history(self, chat_history):
+    def save_chat_history(self, chat_history, system_prompt):
+        chat_data = {
+            "system_prompt": system_prompt,
+            "conversation_history": chat_history
+        }
         chat_history_path = os.path.join(os.getcwd(), self.chat_filename)
         with open(chat_history_path, 'w') as file:
-            json.dump(chat_history, file, indent=4)
+            json.dump(chat_data, file, indent=4)
         ConfigManager.save_config_value('current_chat_filename', self.chat_filename)
 
     def load_chat_history(self):
@@ -65,10 +65,11 @@ class ChatHistoryManager:
         if os.path.exists(chat_history_path):
             try:
                 with open(chat_history_path, 'r') as file:
-                    return json.load(file)
+                    chat_data = json.load(file)
+                    return chat_data.get("conversation_history", []), chat_data.get("system_prompt", "")
             except json.JSONDecodeError:
-                return []
-        return []
+                return [], ""
+        return [], ""
 
     def delete_chat_file(self):
         chat_history_path = os.path.join(os.getcwd(), self.chat_filename)
@@ -100,11 +101,10 @@ class ChatHistoryManager:
                 return filename
             index += 1
 
-
 class CustomTitleBar(QWidget):
     def __init__(self, parent=None, font_size=14):
         super().__init__(parent)
-        self.parent_widget = parent  # Store the reference to the parent widget
+        self.parent_widget = parent
         self.font_size = font_size
         self.initUI()
 
@@ -166,8 +166,8 @@ class Chatbox(QWidget):
         super().__init__()
         self.config = ConfigManager.load_config()
         self.chat_manager = ChatHistoryManager(chat_filename=self.config.get('current_chat_filename', 'chat_1.json'))
-        self.font_size = int(self.config.get("font_size", 18))  # Ensure font size is an integer
-        self.conversation_history = self.chat_manager.load_chat_history()
+        self.font_size = int(self.config.get("font_size", 18))
+        self.conversation_history, self.system_prompt = self.chat_manager.load_chat_history()
         self.command_history = []
         self.command_index = -1
         self.is_moving = False
@@ -176,32 +176,27 @@ class Chatbox(QWidget):
         self.resizing = False
         self.resize_direction = None
         self.oldPos = QPoint(0, 0)
-        self.selected_model = self.config.get('selected_model')  # Load the selected model from config
+        self.selected_model = self.config.get('selected_model')
         self.available_models = []
-        self.mode = self.config.get('current_mode', 'llama.cpp')  # Load the mode from config
+        self.mode = self.config.get('current_mode', 'llama.cpp')
         self.ollama_online, self.llamacpp_online = self.server_is_reachable()
 
         self.initUI()
 
-        # Load available models if Ollama is online
         if self.ollama_online:
             self.load_models_from_ollama()
 
-        # Load the chat history to display
         self.load_chat_to_display()
 
-        # Display a welcome message based on the mode
         if not self.conversation_history:
             self.display_welcome_message()
 
     def server_is_reachable(self):
-        # Check both servers
         ollama_online = self.check_server_status(self.config.get("ollama_host", "127.0.0.1:11434"))
         llamacpp_online = self.check_server_status(self.config.get("llama.cpp_host", "127.0.0.1:8080"))
         return ollama_online, llamacpp_online
     
     def reset_mode(self, parts):
-        # Toggle the mode between 'ollama' and 'llama.cpp'
         if self.mode == 'ollama':
             self.mode = 'llama.cpp'
         else:
@@ -211,7 +206,7 @@ class Chatbox(QWidget):
         self.chat_history.clear()
         self.load_chat_to_display()
         self.chat_history.append(f"<b style='color: yellow;'>Mode switched to {self.mode}. Chat history loaded.</b>")
-        self.display_welcome_message()  # Display the welcome message and model list if applicable
+        self.display_welcome_message()
 
     def check_server_status(self, host):
         try:
@@ -248,7 +243,7 @@ class Chatbox(QWidget):
 
         if ollama_status:
             self.mode = 'ollama'
-            self.display_models_list()  # Display models list for Ollama if available
+            self.display_models_list()
         elif llamacpp_status:
             self.mode = 'llama.cpp'
             self.chat_history.append("<b style='color: yellow;'>Llama.cpp is ready to chat.</b>")
@@ -272,7 +267,7 @@ class Chatbox(QWidget):
             self.user_input.clear()
 
     def execute_command(self, command):
-        parts = command.split(maxsplit=1)  # Initial split to identify the command and its first argument
+        parts = command.split(maxsplit=1)
         command_key = parts[0]
 
         commands = {
@@ -285,16 +280,14 @@ class Chatbox(QWidget):
         }
 
         if command_key in commands:
-            # Handle the special case for /config to allow long prompts
             if command_key == "/config":
                 config_parts = command.split(maxsplit=2)
                 if len(config_parts) == 3:
                     commands[command_key](config_parts)
                 else:
                     self.display_error("Usage: /config <key> <value>")
-            # Handle other commands as usual
             else:
-                parts = command.split(maxsplit=2)  # For handling commands with up to 3 parts
+                parts = command.split(maxsplit(2))
                 commands[command_key](parts)
         else:
             self.display_error(f"Invalid command: {command}")
@@ -408,7 +401,7 @@ class Chatbox(QWidget):
                 background: none;
             }}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
-                background: none;
+                background: none.
             }}
         """
 
@@ -422,9 +415,7 @@ class Chatbox(QWidget):
         return f"margin: 0; padding: 0; background-color: #000000; color: {self.config['user_message_color']}; border: none;"
 
     def load_chat_to_display(self):
-        # Clear existing history
         self.chat_history.clear()
-        # Load and display chat history
         for message in self.conversation_history:
             if message['role'] == 'user':
                 user_message_html = markdown.markdown(message['content'], extensions=['tables', 'fenced_code'])
@@ -454,6 +445,7 @@ class Chatbox(QWidget):
             <li><code>path</code>: Specify the API endpoint path. Example: <code>/config path /v2/chat/completions</code></li>
             <li><code>user_message_color</code>: Change the color of user messages. Example: <code>/config user_message_color #00FF00</code></li>
             <li><code>assistant_message_color</code>: Change the color of assistant messages. Example: <code>/config assistant_message_color #FFBF00</code></li>
+            <li><code>system_prompt</code>: Set a custom system prompt for the chat session. Example: <code>/config system_prompt "Your prompt here"</code></li>
         </ul>
 
         <strong>/chat</strong>
@@ -479,18 +471,20 @@ class Chatbox(QWidget):
         self.help_message_displayed = True
 
     def update_config(self, parts):
-        if len(parts) >= 3:  # Ensure there are enough parts to process
+        if len(parts) >= 3:
             key = parts[1]
-            value = parts[2] if len(parts) == 3 else ' '.join(parts[2:])  # Join the remaining parts for system_prompt
+            value = parts[2] if len(parts) == 3 else ' '.join(parts[2:])
 
-            if key in self.config:
+            if key == "system_prompt":
+                self.system_prompt = value
+                self.chat_manager.save_chat_history(self.conversation_history, self.system_prompt)
+                self.chat_history.append(f"<b style='color: yellow;'>System prompt updated: {value}</b>")
+            elif key in self.config:
                 ConfigManager.save_config_value(key, value)
-                self.config[key] = value  # Update the local config
+                self.config[key] = value
                 if key == "font_size":
-                    self.font_size = int(value)  # Ensure the font size is an integer
-                    self.update_font_sizes()  # Immediately update UI elements
-                elif key == "system_prompt":
-                    self.chat_history.append(f"<b style='color: yellow;'>System prompt updated: {value}</b>")
+                    self.font_size = int(value)
+                    self.update_font_sizes()
                 self.chat_history.append(f"<b style='color: yellow;'>Config updated: {key} = {value}</b>")
             else:
                 self.display_error(f"Invalid configuration key: {key}")
@@ -502,12 +496,13 @@ class Chatbox(QWidget):
 
             if action == "new":
                 self.chat_manager.chat_filename = filename
-                self.chat_manager.save_chat_history([])  # Save an empty chat history for new chat
+                self.system_prompt = ""
+                self.chat_manager.save_chat_history([], self.system_prompt)
                 self.open_chat(filename)
                 self.chat_history.append(f"<b style='color: yellow;'>New chat {filename} created and opened.</b>")
             elif action == "save":
                 self.chat_manager.chat_filename = filename
-                self.chat_manager.save_chat_history(self.conversation_history)
+                self.chat_manager.save_chat_history(self.conversation_history, self.system_prompt)
                 self.chat_history.append(f"<b style='color: yellow;'>Chat saved as {filename}.</b>")
             elif action == "delete":
                 self.chat_manager.set_chat_filename(filename)
@@ -546,14 +541,15 @@ class Chatbox(QWidget):
 
     def reset_chat(self):
         self.conversation_history = []
+        self.system_prompt = ""
         self.chat_history.clear()
-        self.chat_manager.save_chat_history(self.conversation_history)
+        self.chat_manager.save_chat_history(self.conversation_history, self.system_prompt)
         self.chat_history.append(f"<b style='color: yellow;'>Chat history has been reset.</b>")
         self.chat_history.moveCursor(QTextCursor.End)
 
     def open_chat(self, chat_filename):
         self.chat_manager.chat_filename = chat_filename
-        self.conversation_history = self.chat_manager.load_chat_history()
+        self.conversation_history, self.system_prompt = self.chat_manager.load_chat_history()
         self.chat_history.clear()
         self.load_chat_to_display()
         self.chat_history.append(f"<b style='color: yellow;'>Chat {chat_filename} opened.</b>")
@@ -565,25 +561,19 @@ class Chatbox(QWidget):
         return filename
 
     def update_font_sizes(self):
-        font_size = int(self.font_size)  # Ensure the font size is an integer
+        font_size = int(self.font_size)
         
-        # Update the chat history font size
         self.chat_history.setFont(QFont("Courier New", font_size))
         
-        # Update the user input font size
         self.user_input.setFont(QFont("Courier New", font_size))
         
-        # Update the prompt label font size
         self.prompt_label.setStyleSheet(f"color: {self.config['user_message_color']}; font-size: {font_size}px; font-family: Courier New; margin: 0; padding: 0;")
         
-        # Update the custom title bar font size
         self.custom_title_bar.font_size = font_size
         self.custom_title_bar.update_buttons_font_size(font_size)
         
-        # Refresh the chat history style to apply any changes
         self.chat_history.setStyleSheet(self.get_chat_style())
         
-        # Update the global style
         self.setStyleSheet(self.get_global_style())
         
     def send_message(self, user_message):
@@ -594,12 +584,12 @@ class Chatbox(QWidget):
         self.chat_history.moveCursor(QTextCursor.End)
         
         self.conversation_history.append({"role": "user", "content": user_message})
-        self.chat_manager.save_chat_history(self.conversation_history)
+        self.chat_manager.save_chat_history(self.conversation_history, self.system_prompt)
 
         base_url = self.config['base_url']
         path = self.config['path']
 
-        system_prompt = {"role": "system", "content": self.config.get("system_prompt", "You are a helpful assistant.")}
+        system_prompt = {"role": "system", "content": self.system_prompt if self.system_prompt else "You are a helpful assistant."}
 
         if self.mode == 'ollama':
             full_endpoint = f"{base_url}{self.config['ollama_host']}{path}"
@@ -620,7 +610,7 @@ class Chatbox(QWidget):
 
     def handle_response(self, response):
         self.conversation_history.append({"role": "assistant", "content": response})
-        self.chat_manager.save_chat_history(self.conversation_history)
+        self.chat_manager.save_chat_history(self.conversation_history, self.system_prompt)
 
         response_html = markdown.markdown(response, extensions=['tables', 'fenced_code'])
         response_html = self.apply_custom_css(response_html, role="assistant")

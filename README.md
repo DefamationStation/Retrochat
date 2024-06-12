@@ -1,8 +1,10 @@
 # Retrochat
 
 ## Overview
-![image](https://github.com/DefamationStation/Retrochat/assets/82258900/cd8f057d-943e-4e11-ab1b-8a227e969aee)
+
 Retrochat is a simple and lightweight chatbox application that leverages your local [llama.cpp](https://github.com/ggerganov/llama.cpp) server. This app is designed for easy configuration and seamless communication through a classic chat interface.
+
+![image](https://github.com/DefamationStation/Retrochat/assets/82258900/e3609f2f-779d-4609-b60e-450ced1ca64f)
 
 **Please note:** Llama.cpp or any sort of inference isn't included with this app, you will need to run your own server.
 
@@ -40,7 +42,7 @@ This application is being actively developed using [Aider](https://aider.chat/),
 
 ## Screenshots
 ![image](https://github.com/DefamationStation/Retrochat/assets/82258900/6f5585c6-2e71-4be9-927c-33b11f92f600)
-![image](https://github.com/DefamationStation/Retrochat/assets/82258900/e3609f2f-779d-4609-b60e-450ced1ca64f)
+![image](https://github.com/DefamationStation/Retrochat/assets/82258900/cd8f057d-943e-4e11-ab1b-8a227e969aee)
 ![Retrochat in Action](https://github.com/DefamationStation/Retrochat/assets/82258900/0e0b9b75-3c21-4c94-83ae-e22a0e34fe84)
 
 ## Usage Tips

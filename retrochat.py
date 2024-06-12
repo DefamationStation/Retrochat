@@ -3,7 +3,7 @@ import sys
 import json
 import requests
 import markdown
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QScrollArea, QHBoxLayout, QFrame, QLabel, QPushButton, QComboBox, QMessageBox
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QScrollArea, QHBoxLayout, QFrame, QLabel, QPushButton, QMessageBox
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint, QRect
 from PyQt5.QtGui import QTextCursor, QFont
 
@@ -13,12 +13,14 @@ class ConfigManager:
     DEFAULT_CONFIG = {
         "base_url": "http://",
         "ollama_host": "127.0.0.1:11434",
+        "llama.cpp_host": "127.0.0.1:8080",
         "path": "/v1/chat/completions",
         "user_message_color": "#00FF00",
         "assistant_message_color": "#FFBF00",
         "font_size": 18,
         "current_chat_filename": "chat_1.json",
-        "selected_model": None
+        "selected_model": "",
+        "current_mode": "llama.cpp"  # Default mode
     }
 
     @classmethod
@@ -152,13 +154,12 @@ class CustomTitleBar(QWidget):
     def mouseReleaseEvent(self, event):
         self.parent.is_moving = False
 
-# Chatbox class
 class Chatbox(QWidget):
     def __init__(self):
         super().__init__()
         self.config = ConfigManager.load_config()
         self.chat_manager = ChatHistoryManager(chat_filename=self.config.get('current_chat_filename', 'chat_1.json'))
-        self.font_size = self.config.get("font_size", 14)
+        self.font_size = self.config.get("font_size", 18)
         self.conversation_history = self.chat_manager.load_chat_history()
         self.command_history = []
         self.command_index = -1
@@ -169,39 +170,151 @@ class Chatbox(QWidget):
         self.resize_direction = None
         self.oldPos = QPoint(0, 0)
         self.selected_model = self.config.get('selected_model')  # Load the selected model from config
-        self.available_models = []  
+        self.available_models = []
+        self.mode = self.config.get('current_mode', 'llama.cpp')  # Load the mode from config
+        self.ollama_online, self.llamacpp_online = self.server_is_reachable()
+
         self.initUI()
 
-        if self.server_is_reachable():
-            if not self.selected_model:
-                self.prompt_model_selection()
-            else:
-                self.load_chat_to_display()
-        else:
-            self.display_error("Server is not reachable. Please check the configuration.")
+        # Load available models if Ollama is online
+        if self.ollama_online:
+            self.load_models_from_ollama()
+
+        # Load the chat history to display
+        self.load_chat_to_display()
+
+        # Display a welcome message based on the mode
+        if not self.conversation_history:
+            self.display_welcome_message()
 
     def server_is_reachable(self):
+        # Check both servers
+        ollama_online = self.check_server_status(self.config.get("ollama_host", "127.0.0.1:11434"))
+        llamacpp_online = self.check_server_status(self.config.get("llama.cpp_host", "127.0.0.1:8080"))
+        return ollama_online, llamacpp_online
+
+    def check_server_status(self, host):
+        try:
+            response = requests.get(f"http://{host}")
+            return response.status_code == 200
+        except requests.RequestException:
+            return False
+
+    def load_models_from_ollama(self):
         try:
             base_url = self.config.get("base_url", "http://")
             host = self.config.get("ollama_host", "127.0.0.1:11434")
             full_url = base_url + host
             response = requests.get(f"{full_url}/api/tags")
-            return response.status_code == 200
-        except requests.RequestException:
-            return False
+            response.raise_for_status()
+            models_info = response.json()
+            self.available_models = models_info.get("models", [])
+        except requests.RequestException as e:
+            self.chat_history.append(f"<b style='color: red;'>Error fetching models from Ollama: {e}</b>")
 
-    def prompt_model_selection(self):
-        self.load_models_from_ollama()
-        if self.available_models:
-            dialog = ModelSelectionDialog(self.available_models)
-            if dialog.exec_():
-                selected_model = dialog.get_selected_model()
-                self.selected_model = selected_model
-                ConfigManager.save_config_value('selected_model', selected_model)
+    def display_welcome_message(self):
+        ollama_status, llamacpp_status = self.server_is_reachable()
+
+        ollama_status_message = f"<b style='color: {'green' if ollama_status else 'red'};'>Ollama host: {'Online' if ollama_status else 'Offline'}</b>"
+        llamacpp_status_message = f"<b style='color: {'green' if llamacpp_status else 'red'};'>Llama.cpp host: {'Online' if llamacpp_status else 'Offline'}</b>"
+
+        welcome_message = f"""
+        <h3>Welcome to Retrochat!</h3>
+        <p>{ollama_status_message}</p>
+        <p>{llamacpp_status_message}</p>
+        """
+
+        self.chat_history.setHtml(welcome_message)
+
+        if ollama_status:
+            self.mode = 'ollama'
+            self.display_models_list()  # Display models list for Ollama if available
+        elif llamacpp_status:
+            self.mode = 'llama.cpp'
+            self.chat_history.append("<b style='color: yellow;'>Llama.cpp is ready to chat.</b>")
+
+        self.help_message_displayed = True
+        self.chat_history.moveCursor(QTextCursor.End)
+
+    def process_input(self):
+        user_message = self.user_input.text().strip()
+        if user_message:
+            if self.help_message_displayed:
+                self.chat_history.clear()
+                self.help_message_displayed = False
+
+            if user_message.startswith("/"):
+                self.execute_command(user_message)
+                self.command_history.append(user_message)
+                self.command_index = -1
+            else:
+                self.send_message(user_message)
+            self.user_input.clear()
+
+    def execute_command(self, command):
+        parts = command.split(maxsplit=3)
+        commands = {
+            "/config": self.update_config,
+            "/chat": self.manage_chat,
+            "/models": self.list_models,
+            "/select_model": self.select_model,
+            "/reset_mode": self.reset_mode,
+            "/help": self.display_help_message,
+        }
+        if parts[0] in commands:
+            if parts[0] == "/help":
+                commands[parts[0]]()  # Call display_help_message without arguments
+            else:
+                commands[parts[0]](parts)
+        else:
+            self.display_error(f"Invalid command: {command}")
+
+    def reset_mode(self, parts):
+        if self.mode == 'ollama':
+            self.mode = 'llama.cpp'
+        else:
+            self.mode = 'ollama'
+        ConfigManager.save_config_value('current_mode', self.mode)
+        self.chat_history.clear()
+        self.load_chat_to_display()
+        self.chat_history.append(f"<b style='color: yellow;'>Mode switched to {self.mode}. Chat history loaded.</b>")
+        self.display_welcome_message()  # Display the welcome message and model list if applicable
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Up:
+            if self.command_history:
+                if self.command_index == -1:
+                    self.command_index = len(self.command_history) - 1
+                else:
+                    self.command_index = max(0, self.command_index - 1)
+                self.user_input.setText(self.command_history[self.command_index])
+        elif event.key() == Qt.Key_Down:
+            if self.command_index != -1:
+                self.command_index = min(len(self.command_history), self.command_index + 1)
+                if self.command_index < len(self.command_history):
+                    self.user_input.setText(self.command_history[self.command_index])
+                else:
+                    self.user_input.clear()
+                    self.command_index = -1
+        elif event.key() == Qt.Key_Enter or event.key() == Qt.Key_Return:
+            self.process_input()
+        else:
+            super().keyPressEvent(event)
+
+    def select_model(self, parts):
+        if len(parts) == 2:
+            model_name = parts[1]
+            matching_model = next((model for model in self.available_models if model["name"] == model_name), None)
+            if matching_model:
+                self.selected_model = model_name
+                ConfigManager.save_config_value('selected_model', model_name)
+                self.chat_history.append(f"<b style='color: yellow;'>Selected model: {model_name}</b>")
                 self.chat_history.clear()
                 self.load_chat_to_display()
+            else:
+                self.display_error(f"Model {model_name} not found in the available models.")
         else:
-            self.display_error("No models available to select.")
+            self.display_error("Usage: /select_model model_name")
 
     def display_error(self, message):
         self.chat_history.append(f"<b style='color: red;'>Error:</b> {message}")
@@ -290,6 +403,9 @@ class Chatbox(QWidget):
         return f"margin: 0; padding: 0; background-color: #000000; color: {self.config['user_message_color']}; border: none;"
 
     def load_chat_to_display(self):
+        # Clear existing history
+        self.chat_history.clear()
+        # Load and display chat history
         for message in self.conversation_history:
             if message['role'] == 'user':
                 user_message_html = markdown.markdown(message['content'], extensions=['tables', 'fenced_code'])
@@ -342,40 +458,6 @@ class Chatbox(QWidget):
         """
         self.chat_history.setHtml(help_message)
         self.help_message_displayed = True
-
-    def process_input(self):
-        user_message = self.user_input.text().strip()
-        if user_message:
-            if self.help_message_displayed:
-                self.chat_history.clear()
-                self.help_message_displayed = False
-                self.chat_manager.save_chat_history([])
-
-            if user_message.startswith("/"):
-                self.execute_command(user_message)
-                self.command_history.append(user_message)
-                self.command_index = -1
-            else:
-                self.send_message(user_message)
-            self.user_input.clear()
-
-    def execute_command(self, command):
-        parts = command.split(maxsplit=3)
-        commands = {
-            "/config": self.update_config,
-            "/chat": self.manage_chat,
-            "/models": self.list_models,
-            "/select_model": self.select_model,
-            "/help": self.display_help_message,
-        }
-        if parts[0] in commands:
-            if parts[0] == "/help":
-                commands[parts[0]]()  # Call display_help_message without arguments
-            else:
-                commands[parts[0]](parts)
-        else:
-            self.display_error(f"Invalid command: {command}")
-
 
     def update_config(self, parts):
         if len(parts) == 3:
@@ -442,14 +524,8 @@ class Chatbox(QWidget):
     def reset_chat(self):
         self.conversation_history = []
         self.chat_history.clear()
-        # Check if the file exists before saving
-        chat_history_path = os.path.join(os.getcwd(), self.chat_manager.chat_filename)
-        if os.path.exists(chat_history_path):
-            self.chat_manager.save_chat_history(self.conversation_history)
-            self.chat_history.append(f"<b style='color: yellow;'>Chat history has been reset.</b>")
-        else:
-            self.chat_history.append(f"<b style='color: yellow;'>Chat history reset but not saved as the file does not exist.</b>")
-        
+        self.chat_manager.save_chat_history(self.conversation_history)
+        self.chat_history.append(f"<b style='color: yellow;'>Chat history has been reset.</b>")
         self.chat_history.moveCursor(QTextCursor.End)
 
     def open_chat(self, chat_filename):
@@ -479,22 +555,25 @@ class Chatbox(QWidget):
         
         self.conversation_history.append({"role": "user", "content": user_message})
         self.chat_manager.save_chat_history(self.conversation_history)
-        
-        full_endpoint = f"{self.config['base_url']}{self.config['ollama_host']}{self.config['path']}"
-        if self.selected_model:
+
+        base_url = self.config['base_url']
+        path = self.config['path']
+        if self.mode == 'ollama':
+            full_endpoint = f"{base_url}{self.config['ollama_host']}{path}"
             data = {
                 "model": self.selected_model,
                 "messages": self.conversation_history
             }
         else:
-            self.display_error("No model selected. Please select a model using /select_model <model_name>")
-            return
-        
+            full_endpoint = f"{base_url}{self.config['llama.cpp_host']}{path}"
+            data = {
+                "messages": self.conversation_history
+            }
+
         self.worker = NetworkWorker(self.conversation_history, full_endpoint, data)
         self.worker.response_received.connect(self.handle_response)
         self.worker.error_occurred.connect(self.handle_error)
         self.worker.start()
-
 
     def handle_response(self, response):
         self.conversation_history.append({"role": "assistant", "content": response})
@@ -581,25 +660,6 @@ class Chatbox(QWidget):
             """
             return f"{custom_css}<div class='bot-message'>{html_content}</div>"
 
-    def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Up:
-            if self.command_history:
-                if self.command_index == -1:
-                    self.command_index = len(self.command_history) - 1
-                else:
-                    self.command_index = max(0, self.command_index - 1)
-                self.user_input.setText(self.command_history[self.command_index])
-        elif event.key() == Qt.Key_Down:
-            if self.command_index != -1:
-                self.command_index = min(len(self.command_history), self.command_index + 1)
-                if self.command_index < len(self.command_history):
-                    self.user_input.setText(self.command_history[self.command_index])
-                else:
-                    self.user_input.clear()
-                    self.command_index = -1
-        else:
-            super().keyPressEvent(event)
-
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             if self.is_on_border(event.pos()):
@@ -653,43 +713,18 @@ class Chatbox(QWidget):
             return 'right'
         return None
 
-    def load_models_from_ollama(self):
-        try:
-            base_url = self.config.get("base_url", "http://")
-            host = self.config.get("ollama_host", "127.0.0.1:11434")
-            full_url = base_url + host
-            response = requests.get(f"{full_url}/api/tags")
-            response.raise_for_status()
-            models_info = response.json()
-            self.available_models = models_info.get("models", [])
-        except requests.RequestException as e:
-            self.chat_history.append(f"<b style='color: red;'>Error fetching models from Ollama: {e}</b>")
-
     def display_models_list(self):
         if self.available_models:
-            self.chat_history.append("<b style='color: yellow;'>Available models:</b>")
+            self.chat_history.append("<b style='color: yellow;'>Available models from Ollama:</b>")
             for model in self.available_models:
                 self.chat_history.append(f"<b style='color: green;'>/select_model {model['name']}</b>")
-            self.chat_history.append("<b style='color: yellow;'>You can copy and paste the above commands to select a model.</b>")
+            self.chat_history.append("<b style='color: yellow;'>Copy and paste a command to select a model and press enter.</b>")
         else:
             self.chat_history.append("<b style='color: yellow;'>No available models found.</b>")
         self.chat_history.moveCursor(QTextCursor.End)
 
     def list_models(self, parts):
         self.display_models_list()
-
-    def select_model(self, parts):
-        if len(parts) == 2:
-            model_name = parts[1]
-            matching_model = next((model for model in self.available_models if model["name"] == model_name), None)
-            if matching_model:
-                self.selected_model = model_name
-                ConfigManager.save_config_value('selected_model', model_name)
-                self.chat_history.append(f"<b style='color: yellow;'>Selected model: {model_name}</b>")
-            else:
-                self.display_error(f"Model {model_name} not found in the available models.")
-        else:
-            self.display_error("Usage: /select_model model_name")
 
 class NetworkWorker(QThread):
     response_received = pyqtSignal(str)
@@ -715,32 +750,6 @@ class NetworkWorker(QThread):
                 self.error_occurred.emit(f"{response.status_code} - {response.text}")
         except requests.RequestException as e:
             self.error_occurred.emit(str(e))
-
-class ModelSelectionDialog(QMessageBox):
-    def __init__(self, models, parent=None):
-        super().__init__(parent)
-        self.models = models
-        self.selected_model = None
-        self.setWindowTitle("Select Model")
-        self.setText("Please select a model to use:")
-        self.setIcon(QMessageBox.Information)
-
-        combo = QComboBox(self)
-        for model in models:
-            combo.addItem(model["name"])
-
-        self.layout().addWidget(combo, 1, 1)
-        self.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
-        self.combo = combo
-
-        self.buttonClicked.connect(self.on_button_clicked)
-
-    def on_button_clicked(self, button):
-        if button.text() == "OK":
-            self.selected_model = self.combo.currentText()
-
-    def get_selected_model(self):
-        return self.selected_model
 
 if __name__ == "__main__":
     app = QApplication([])

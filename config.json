@@ -7,5 +7,6 @@
     "assistant_message_color": "#FFBF00",
     "font_size": 18,
     "current_chat_filename": "chat_1.json",
-    "selected_model": "llama3:8b-instruct-q6_K"
+    "selected_model": "llama3:8b-instruct-q6_K",
+    "current_mode": "ollama"
 }

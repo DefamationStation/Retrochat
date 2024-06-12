@@ -38,9 +38,9 @@ This application is being actively developed using [Aider](https://aider.chat/),
 - **Join Our Community**: Connect with other users and developers on our [Discord](https://discord.gg/dZxjYNyNth).
 
 ## Screenshots
-![Retrochat Screenshot 1](https://github.com/DefamationStation/Retrochat/assets/82258900/8cfc0087-aa33-4e58-9903-0abe049387da)
-![Retrochat Screenshot 2](https://github.com/DefamationStation/Retrochat/assets/82258900/1ada054d-de2f-4f6d-9eb4-a0a34f3214da)
-![Retrochat Screenshot 3](https://github.com/DefamationStation/Retrochat/assets/82258900/f9f9cfa9-e81e-4d3a-963a-6e7eeb3f90d9)
+![image](https://github.com/DefamationStation/Retrochat/assets/82258900/6f5585c6-2e71-4be9-927c-33b11f92f600)
+![image](https://github.com/DefamationStation/Retrochat/assets/82258900/e3609f2f-779d-4609-b60e-450ced1ca64f)
+![image](https://github.com/DefamationStation/Retrochat/assets/82258900/cd8f057d-943e-4e11-ab1b-8a227e969aee)
 ![Retrochat in Action](https://github.com/DefamationStation/Retrochat/assets/82258900/0e0b9b75-3c21-4c94-83ae-e22a0e34fe84)
 
 ## Usage Tips

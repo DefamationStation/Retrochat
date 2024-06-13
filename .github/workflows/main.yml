@@ -3,68 +3,55 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*'  # Triggers the workflow on push of any tag starting with 'v'
+      - 'v*.*.*'
 
 jobs:
   build:
-    runs-on: windows-latest  # Use a Windows runner
+    runs-on: windows-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.x'  # Specify the Python version you need
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller  # Ensuring PyInstaller is installed
 
-    - name: Install PyInstaller
-      run: |
-        pip install pyinstaller
+      - name: Build the executable
+        run: |
+          pyinstaller --onefile --windowed --icon=retrochat.ico retrochat.py
+        shell: bash
 
-    - name: Build executable
-      run: |
-        pyinstaller --onefile --windowed --icon=retrochat.ico retrochat.py
+      - name: Create output directory
+        run: mkdir output
 
-    - name: Archive build output
-      run: |
-        mkdir output
-        mv dist/retrochat.exe output/  # Move the built executable to a specific folder
-        cp retrochat.py output/  # Copy the original Python file to the output folder
-      continue-on-error: true  # Ensure workflow continues even if this step fails
+      - name: Move executable to output
+        run: |
+          mv dist/retrochat.exe output/  # Ensure this path matches the actual output of PyInstaller
+          cp retrochat.py output/  # Optionally copy the source file for reference
 
-    - name: Create GitHub Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        draft: false
-        prerelease: false
+      - name: Upload Release Assets
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: output/retrochat.exe
+          asset_name: retrochat.exe
+          asset_content_type: application/octet-stream
 
-    - name: Upload release assets
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: output/retrochat.exe
-        asset_name: retrochat.exe
-        asset_content_type: application/octet-stream
-
-    - name: Upload Python script to release
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: output/retrochat.py
-        asset_name: retrochat.py
-        asset_content_type: text/x-python
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false

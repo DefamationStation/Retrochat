@@ -1,0 +1,56 @@
+name: Create Release on New .exe Commit
+
+on:
+  push:
+    paths:
+      - 'dist/*.exe'
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Get the latest tag
+        id: get_tag
+        run: |
+          latest_tag=$(git describe --tags --abbrev=0)
+          echo "Latest tag is: $latest_tag"
+          echo "::set-output name=tag::$latest_tag"
+
+      - name: Create new tag
+        id: create_tag
+        run: |
+          new_tag=v$(date +'%Y%m%d%H%M%S')
+          git tag $new_tag
+          git push origin $new_tag
+          echo "New tag created: $new_tag"
+          echo "::set-output name=new_tag::$new_tag"
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.create_tag.outputs.new_tag }}
+          release_name: Release ${{ steps.create_tag.outputs.new_tag }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Retrochat.exe
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: dist/retrochat.exe
+          asset_name: retrochat.exe
+          asset_content_type: application/octet-stream
+
+      - name: Upload Retrochat.py
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: retrochat.py
+          asset_name: retrochat.py
+          asset_content_type: text/x-python

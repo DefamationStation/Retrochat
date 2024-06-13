@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest  # Use a Windows runner
 
     steps:
     - name: Checkout code
@@ -16,7 +16,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.12.4'  # Specify the Python version you need
+        python-version: '3.x'  # Specify the Python version you need
 
     - name: Install dependencies
       run: |
@@ -68,4 +68,3 @@ jobs:
         asset_path: output/retrochat.py
         asset_name: retrochat.py
         asset_content_type: text/x-python
-

@@ -3,6 +3,7 @@ import sys
 import json
 import requests
 import markdown
+import shutil
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QScrollArea, QHBoxLayout, QFrame, QLabel, QPushButton, QMessageBox
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint, QRect
 from PyQt5.QtGui import QTextCursor, QFont
@@ -30,8 +31,11 @@ class ConfigManager:
             return cls.DEFAULT_CONFIG
         try:
             with open(config_path, 'r') as config_file:
-                return json.load(config_file)
+                config = json.load(config_file)
+                return cls.check_and_update_config(config)
         except (json.JSONDecodeError, Exception):
+            cls.rename_old_file(cls.CONFIG_FILENAME)
+            cls.save_config(cls.DEFAULT_CONFIG)
             return cls.DEFAULT_CONFIG
 
     @classmethod
@@ -45,6 +49,49 @@ class ConfigManager:
         config = cls.load_config()
         config[key] = value
         cls.save_config(config)
+
+    @classmethod
+    def check_and_update_config(cls, config):
+        """
+        Update the loaded config to ensure it matches the default configuration.
+        This keeps existing keys if they are correct and only adds missing keys.
+        """
+        if isinstance(config, dict):
+            updated_config = cls.update_to_match_default(config, cls.DEFAULT_CONFIG)
+            if updated_config != config:
+                cls.save_config(updated_config)
+            return updated_config
+        else:
+            cls.rename_old_file(cls.CONFIG_FILENAME)
+            cls.save_config(cls.DEFAULT_CONFIG)
+            return cls.DEFAULT_CONFIG
+
+    @classmethod
+    def update_to_match_default(cls, data, default_structure):
+        """
+        Recursively update the dictionary to match the default structure.
+        """
+        if not isinstance(data, dict) or not isinstance(default_structure, dict):
+            return default_structure
+
+        updated_data = data.copy()
+        for key, default_value in default_structure.items():
+            if key not in updated_data:
+                updated_data[key] = default_value
+            elif isinstance(default_value, dict):
+                updated_data[key] = cls.update_to_match_default(updated_data[key], default_value)
+        return updated_data
+
+    @staticmethod
+    def rename_old_file(filename):
+        """
+        Rename a file with the prefix 'OLD_'.
+        """
+        old_file_path = os.path.join(os.getcwd(), filename)
+        new_file_path = os.path.join(os.getcwd(), f"OLD_{filename}")
+        if os.path.exists(old_file_path):
+            shutil.move(old_file_path, new_file_path)
+            print(f"Renamed file {old_file_path} to {new_file_path}")
 
 class ChatHistoryManager:
     def __init__(self, chat_filename="chat_1.json"):
@@ -66,29 +113,93 @@ class ChatHistoryManager:
             try:
                 with open(chat_history_path, 'r') as file:
                     chat_data = json.load(file)
-                    return chat_data.get("conversation_history", []), chat_data.get("system_prompt", "")
+                    if isinstance(chat_data, dict):
+                        return chat_data.get("conversation_history", []), chat_data.get("system_prompt", "")
+                    else:
+                        raise json.JSONDecodeError("Invalid format", chat_history_path, 0)
             except json.JSONDecodeError:
+                self.rename_old_file(self.chat_filename)
+                self.create_new_chat_file()
                 return [], ""
         return [], ""
 
-    def delete_chat_file(self):
-        chat_history_path = os.path.join(os.getcwd(), self.chat_filename)
-        if os.path.exists(chat_history_path):
-            try:
-                os.remove(chat_history_path)
-                print(f"Deleted file: {chat_history_path}")
-            except Exception as e:
-                print(f"Error deleting file {chat_history_path}: {e}")
-        else:
-            print(f"File does not exist: {chat_history_path}")
+    def check_and_update_json_file(self, filename, expected_structure):
+        """
+        Check and update a JSON file to ensure it matches the expected structure.
+        This method tries to keep the existing keys if they are correct and adds missing keys.
+        If it fails to convert the file, it renames it and creates a new one.
+        """
+        file_path = os.path.join(os.getcwd(), filename)
+        if not os.path.exists(file_path):
+            return
 
-    def rename_chat_file(self, new_name):
-        old_path = os.path.join(os.getcwd(), self.chat_filename)
-        new_path = os.path.join(os.getcwd(), new_name)
-        if os.path.exists(old_path):
-            os.rename(old_path, new_path)
-            self.chat_filename = new_name
-            ConfigManager.save_config_value('current_chat_filename', new_name)
+        try:
+            with open(file_path, 'r') as file:
+                data = json.load(file)
+
+            if isinstance(data, dict):
+                updated_data = self.update_json_structure(data, expected_structure)
+
+                if updated_data != data:
+                    with open(file_path, 'w') as file:
+                        json.dump(updated_data, file, indent=4)
+            else:
+                raise json.JSONDecodeError("Invalid format", file_path, 0)
+
+        except json.JSONDecodeError:
+            self.rename_old_file(filename)
+            self.create_new_file_with_structure(filename, expected_structure)
+
+    def update_json_structure(self, data, expected_structure):
+        """
+        Recursively update the JSON structure to match the expected structure.
+        """
+        if not isinstance(data, dict) or not isinstance(expected_structure, dict):
+            return expected_structure
+
+        updated_data = data.copy()
+        for key, default_value in expected_structure.items():
+            if key not in updated_data:
+                updated_data[key] = default_value
+            elif isinstance(default_value, dict):
+                updated_data[key] = self.update_json_structure(updated_data[key], default_value)
+        return updated_data
+
+    def ensure_chat_files_are_up_to_date(self, expected_structure):
+        """
+        Ensure all .json chat files in the current directory are up-to-date with the expected structure.
+        """
+        json_files = [f for f in os.listdir(os.getcwd()) if f.endswith('.json') and f != ConfigManager.CONFIG_FILENAME]
+        for file in json_files:
+            self.check_and_update_json_file(file, expected_structure)
+
+    def rename_old_file(self, filename):
+        """
+        Rename a file with the prefix 'OLD_'.
+        """
+        old_file_path = os.path.join(os.getcwd(), filename)
+        new_file_path = os.path.join(os.getcwd(), f"OLD_{filename}")
+        if os.path.exists(old_file_path):
+            shutil.move(old_file_path, new_file_path)
+            print(f"Renamed file {old_file_path} to {new_file_path}")
+
+    def create_new_file_with_structure(self, filename, structure):
+        """
+        Create a new file with the correct structure.
+        """
+        new_file_path = os.path.join(os.getcwd(), filename)
+        with open(new_file_path, 'w') as file:
+            json.dump(structure, file, indent=4)
+
+    def create_new_chat_file(self):
+        """
+        Create a new chat file with the default structure.
+        """
+        default_structure = {
+            "system_prompt": "",
+            "conversation_history": []
+        }
+        self.create_new_file_with_structure(self.chat_filename, default_structure)
 
     def set_chat_filename(self, filename):
         self.chat_filename = filename
@@ -785,6 +896,19 @@ class NetworkWorker(QThread):
             self.error_occurred.emit(str(e))
 
 if __name__ == "__main__":
+    # Ensure config.json is up to date
+    config = ConfigManager.load_config()
+
+    # Define the expected structure for chat files
+    expected_chat_structure = {
+        "system_prompt": "",
+        "conversation_history": []
+    }
+
+    # Ensure all chat files are up to date with the expected structure
+    chat_manager = ChatHistoryManager()
+    chat_manager.ensure_chat_files_are_up_to_date(expected_chat_structure)
+
     app = QApplication([])
     chatbox = Chatbox()
     chatbox.show()

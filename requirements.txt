@@ -1,3 +1,8 @@
 requests
 markdown
 PyQt5
+pyinstaller
+json
+os
+sys
+shutil

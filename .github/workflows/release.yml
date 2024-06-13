@@ -7,7 +7,7 @@ on:
 
 jobs:
   create-release:
-    runs-on: ubuntu-latest  # Use the Ubuntu runner for Unix-like shell
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -25,10 +25,10 @@ jobs:
         id: increment_tag
         run: |
           latest_tag=${{ steps.get_tag.outputs.tag }}
-          if [[ $latest_tag =~ ^v\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            IFS='.' read -r -a parts <<< "${latest_tag:2}"
+          if [[ $latest_tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            IFS='.' read -r -a parts <<< "${latest_tag:1}"  # Remove 'v' prefix before splitting
             new_patch=$((parts[2] + 1))
-            new_tag="v.${parts[0]}.${parts[1]}.$new_patch"
+            new_tag="v${parts[0]}.${parts[1]}.$new_patch"
           else
             new_tag="v0.0.1"
           fi
@@ -38,6 +38,8 @@ jobs:
 
       - name: Create new tag
         run: |
+          git config --global user.email "your-email@example.com"
+          git config --global user.name "your-github-username"
           git tag ${{ steps.increment_tag.outputs.new_tag }}
           git push origin ${{ steps.increment_tag.outputs.new_tag }}
         shell: bash

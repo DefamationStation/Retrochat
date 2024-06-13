@@ -1,79 +1,33 @@
-name: Create Release on New .exe Commit
+name: Release RetroChat on .exe upload
 
 on:
   push:
     paths:
-      - 'dist/*.exe'
+      - 'dist/retrochat.exe'
 
 jobs:
-  create-release:
+  create_release:
+    name: Create a GitHub Release
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0  # Fetch all history for all tags
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
 
-      - name: Verify fetched tags
-        run: |
-          echo "Listing all tags:"
-          git tag -l
-
-      - name: Get the latest tag
-        id: get_tag
-        run: |
-          latest_tag=$(git describe --tags $(git rev-list --tags --max-count=1) 2>/dev/null || echo "v0.0.0")
-          echo "Latest tag is: $latest_tag"
-          echo "::set-output name=tag::$latest_tag"
-        shell: bash
-
-      - name: Increment tag version
-        id: increment_tag
-        run: |
-          latest_tag=${{ steps.get_tag.outputs.tag }}
-          if [[ $latest_tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            IFS='.' read -r -a parts <<< "${latest_tag:1}"  # Remove 'v' prefix before splitting
-            new_patch=$((parts[2] + 1))
-            new_tag="v${parts[0]}.${parts[1]}.$new_patch"
-          else
-            new_tag="v0.0.1"
-          fi
-          echo "New tag will be: $new_tag"
-          echo "::set-output name=new_tag::$new_tag"
-        shell: bash
-
-      - name: Create new tag
-        run: |
-          git config --global user.email "your-email@example.com"
-          git config --global user.name "your-github-username"
-          git tag ${{ steps.increment_tag.outputs.new_tag }}
-          git push origin ${{ steps.increment_tag.outputs.new_tag }}
-        shell: bash
-
-      - name: Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.increment_tag.outputs.new_tag }}
-          release_name: Release ${{ steps.increment_tag.outputs.new_tag }}
-          draft: false
-          prerelease: false
-
-      - name: Upload Retrochat.exe
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: dist/retrochat.exe
-          asset_name: retrochat.exe
-          asset_content_type: application/octet-stream
-
-      - name: Upload Retrochat.py
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: retrochat.py
-          asset_name: retrochat.py
-          asset_content_type: text/x-python
+    - name: Create Release
+      id: create_release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          dist/retrochat.exe
+          retrochat.py
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Get release URL
+      run: echo "Release created at: ${{ steps.create_release.outputs.upload_url }}"

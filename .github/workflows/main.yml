@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest 
+    runs-on: windows-latest  # Ensuring the job runs on a Windows environment
 
     steps:
       - name: Checkout code
@@ -31,8 +31,8 @@ jobs:
       - name: Move build artifacts
         run: |
           mkdir output
-          move dist\\retrochat.exe output\\  # Use `move` command for Windows
-          copy retrochat.py output\\  # Use `copy` command for Windows
+          move dist\\retrochat.exe output\\  # Using `move` for Windows
+          copy retrochat.py output\\  # Using `copy` for Windows
           
       - name: Upload release assets
         uses: actions/upload-artifact@v3

@@ -7,7 +7,8 @@ on:
 
 jobs:
   create-release:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest  # Use the Ubuntu runner for Unix-like shell
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -15,9 +16,10 @@ jobs:
       - name: Get the latest tag
         id: get_tag
         run: |
-          latest_tag=$(git describe --tags `git rev-list --tags --max-count=1`)
+          latest_tag=$(git describe --tags $(git rev-list --tags --max-count=1))
           echo "Latest tag is: $latest_tag"
           echo "::set-output name=tag::$latest_tag"
+        shell: bash
 
       - name: Increment tag version
         id: increment_tag
@@ -32,11 +34,13 @@ jobs:
           fi
           echo "New tag will be: $new_tag"
           echo "::set-output name=new_tag::$new_tag"
+        shell: bash
 
       - name: Create new tag
         run: |
           git tag ${{ steps.increment_tag.outputs.new_tag }}
           git push origin ${{ steps.increment_tag.outputs.new_tag }}
+        shell: bash
 
       - name: Create GitHub Release
         id: create_release

@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-latest  # Use Windows runner
 
     steps:
       - name: Checkout code
@@ -31,8 +31,8 @@ jobs:
       - name: Move build artifacts
         run: |
           mkdir output
-          mv dist/retrochat.exe output/
-          cp retrochat.py output/
+          mv dist/retrochat.exe output/  # Move the built executable to a specific folder
+          cp retrochat.py output/  # Copy the original Python file to the output folder
           
       - name: Upload release assets
         uses: actions/upload-artifact@v3

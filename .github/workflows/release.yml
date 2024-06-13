@@ -7,7 +7,7 @@ on:
 
 jobs:
   create-release:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -15,18 +15,28 @@ jobs:
       - name: Get the latest tag
         id: get_tag
         run: |
-          latest_tag=$(git describe --tags --abbrev=0)
+          latest_tag=$(git describe --tags `git rev-list --tags --max-count=1`)
           echo "Latest tag is: $latest_tag"
           echo "::set-output name=tag::$latest_tag"
 
-      - name: Create new tag
-        id: create_tag
+      - name: Increment tag version
+        id: increment_tag
         run: |
-          new_tag=v$(date +'%Y%m%d%H%M%S')
-          git tag $new_tag
-          git push origin $new_tag
-          echo "New tag created: $new_tag"
+          latest_tag=${{ steps.get_tag.outputs.tag }}
+          if [[ $latest_tag =~ ^v\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            IFS='.' read -r -a parts <<< "${latest_tag:2}"
+            new_patch=$((parts[2] + 1))
+            new_tag="v.${parts[0]}.${parts[1]}.$new_patch"
+          else
+            new_tag="v.0.0.1"
+          fi
+          echo "New tag will be: $new_tag"
           echo "::set-output name=new_tag::$new_tag"
+
+      - name: Create new tag
+        run: |
+          git tag ${{ steps.increment_tag.outputs.new_tag }}
+          git push origin ${{ steps.increment_tag.outputs.new_tag }}
 
       - name: Create GitHub Release
         id: create_release
@@ -34,8 +44,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ steps.create_tag.outputs.new_tag }}
-          release_name: Release ${{ steps.create_tag.outputs.new_tag }}
+          tag_name: ${{ steps.increment_tag.outputs.new_tag }}
+          release_name: Release ${{ steps.increment_tag.outputs.new_tag }}
           draft: false
           prerelease: false
 

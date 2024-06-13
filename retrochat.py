@@ -20,7 +20,8 @@ class ConfigManager:
         "font_size": 18,
         "current_chat_filename": "chat_1.json",
         "selected_model": "",
-        "current_mode": "llama.cpp"
+        "current_mode": "llama.cpp",
+        "openai_api_key": ""
     }
 
     @classmethod
@@ -302,14 +303,39 @@ class Chatbox(QWidget):
         if not self.conversation_history:
             self.display_welcome_message()
 
+    def send_openai_message(self, user_message):
+        api_key = self.config.get('openai_api_key')
+        if not api_key:
+            self.handle_error("OpenAI API key is not set. Please update your configuration.")
+            return
+
+        openai_url = "https://api.openai.com/v1/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+
+        system_prompt = {"role": "system", "content": self.system_prompt if self.system_prompt else "You are a helpful assistant."}
+        data = {
+            "model": self.selected_model,
+            "messages": [system_prompt] + self.conversation_history
+        }
+
+        self.worker = NetworkWorker(self.conversation_history, openai_url, data, headers)
+        self.worker.response_received.connect(self.handle_response)
+        self.worker.error_occurred.connect(self.handle_error)
+        self.worker.start()
+
     def server_is_reachable(self):
         ollama_online = self.check_server_status(self.config.get("ollama_host", "127.0.0.1:11434"))
         llamacpp_online = self.check_server_status(self.config.get("llama.cpp_host", "127.0.0.1:8080"))
         return ollama_online, llamacpp_online
     
-    def reset_mode(self, parts):
+    def reset_model(self, parts):
         if self.mode == 'ollama':
             self.mode = 'llama.cpp'
+        elif self.mode == 'llama.cpp':
+            self.mode = 'openai'
         else:
             self.mode = 'ollama'
             
@@ -340,24 +366,33 @@ class Chatbox(QWidget):
 
     def display_welcome_message(self):
         ollama_status, llamacpp_status = self.server_is_reachable()
+        openai_status = bool(self.config.get('openai_api_key'))
 
         ollama_status_message = f"<b style='color: {'green' if ollama_status else 'red'};'>Ollama host: {'Online' if ollama_status else 'Offline'}</b>"
         llamacpp_status_message = f"<b style='color: {'green' if llamacpp_status else 'red'};'>Llama.cpp host: {'Online' if llamacpp_status else 'Offline'}</b>"
+        openai_status_message = f"<b style='color: {'green' if openai_status else 'red'};'>OpenAI: {'Configured' if openai_status else 'Not Configured'}</b>"
 
         welcome_message = f"""
         <h3>Welcome to Retrochat!</h3>
         <p>{ollama_status_message}</p>
         <p>{llamacpp_status_message}</p>
+        <p>{openai_status_message}</p>
         """
 
         self.chat_history.setHtml(welcome_message)
 
-        if ollama_status:
+        if openai_status:
+            self.mode = 'openai'
+            self.chat_history.append("<b style='color: yellow;'>OpenAI mode is selected.</b>")
+        elif ollama_status:
             self.mode = 'ollama'
-            self.display_models_list()
+            self.chat_history.append("<b style='color: yellow;'>Ollama mode is selected.</b>")
         elif llamacpp_status:
             self.mode = 'llama.cpp'
             self.chat_history.append("<b style='color: yellow;'>Llama.cpp is ready to chat.</b>")
+
+        if ollama_status:
+            self.display_models_list()
 
         self.help_message_displayed = True
         self.chat_history.moveCursor(QTextCursor.End)
@@ -386,7 +421,7 @@ class Chatbox(QWidget):
             "/chat": self.manage_chat,
             "/models": self.list_models,
             "/select_model": self.select_model,
-            "/reset_mode": self.reset_mode,
+            "/reset_model": self.reset_model,
             "/help": self.display_help_message,
         }
 
@@ -427,15 +462,25 @@ class Chatbox(QWidget):
     def select_model(self, parts):
         if len(parts) == 2:
             model_name = parts[1]
-            matching_model = next((model for model in self.available_models if model["name"] == model_name), None)
-            if matching_model:
+
+            is_ollama_model = any(model["name"] == model_name for model in self.available_models)
+            
+            if is_ollama_model:
+                self.mode = 'ollama'
                 self.selected_model = model_name
                 ConfigManager.save_config_value('selected_model', model_name)
-                self.chat_history.append(f"<b style='color: yellow;'>Selected model: {model_name}</b>")
-                self.chat_history.clear()
-                self.load_chat_to_display()
+                ConfigManager.save_config_value('current_mode', self.mode)
+                self.chat_history.append(f"<b style='color: yellow;'>Ollama mode selected. Model: {model_name}</b>")
             else:
-                self.display_error(f"Model {model_name} not found in the available models.")
+                self.mode = 'openai'
+                self.selected_model = model_name
+                ConfigManager.save_config_value('selected_model', model_name)
+                ConfigManager.save_config_value('current_mode', self.mode)
+                self.chat_history.append(f"<b style='color: yellow;'>OpenAI mode selected. Model: {model_name}</b>")
+
+            self.chat_history.clear()
+            self.load_chat_to_display()
+
         else:
             self.display_error("Usage: /select_model model_name")
 
@@ -540,9 +585,6 @@ class Chatbox(QWidget):
 
     def display_help_message(self):
         help_message = """
-        <h3>Welcome to Retrochat!</h3>
-        <p>Here’s a quick guide to help you get started and make the most out of this application.</p>
-        
         <p><strong>Available Commands:</strong></p>
 
         <p><strong>/config</strong></p>
@@ -552,14 +594,13 @@ class Chatbox(QWidget):
         <ul>
             <li><code>font_size</code>: Adjust the size of the font. Example: <code>/config font_size 18</code></li>
             <li><code>base_url</code>: Set the base URL for API requests. Example: <code>/config base_url http://new-url.com</code></li>
-            <li><code>host</code>: Define the server host and port. Example: <code>/config host 127.0.0.1:5000</code></li>
-            <li><code>path</code>: Specify the API endpoint path. Example: <code>/config path /v2/chat/completions</code></li>
+            <li><code>openai_api_key</code>: Set your OpenAI API key. Example: <code>/config openai_api_key YOUR_API_KEY</code></li>
             <li><code>user_message_color</code>: Change the color of user messages. Example: <code>/config user_message_color #00FF00</code></li>
             <li><code>assistant_message_color</code>: Change the color of assistant messages. Example: <code>/config assistant_message_color #FFBF00</code></li>
             <li><code>system_prompt</code>: Set a custom system prompt for the chat session. Example: <code>/config system_prompt "Your prompt here"</code></li>
         </ul>
 
-        <strong>/chat</strong>
+        <p><strong>/chat</strong></p>
         <p>Manage your chat sessions.</p>
         <p><strong>Usage:</strong> <code>/chat &lt;action&gt; &lt;filename&gt; [new_name]</code></p>
         <p><strong>Available Actions:</strong></p>
@@ -572,11 +613,15 @@ class Chatbox(QWidget):
             <li><code>open &lt;filename&gt;</code>: Open and load an existing chat file. Example: <code>/chat open my_chat.json</code></li>
             <li><code>list</code>: List all JSON chat files in the current directory.</li>
         </ul>
-        
-        <strong>/models</strong>
-        <p>List available models from Ollama.</p>
 
-        <strong>/models</strong>
+        <p><strong>/models</strong></p>
+        <p>List available models from Ollama or OpenAI (depending on the current mode).</p>
+
+        <p><strong>/select_model</strong></p>
+        <p>Select a model for the current mode. Example: <code>/select_model gpt-4o</code> for OpenAI or <code>/select_model model_name</code> for Ollama.</p>
+        
+        <p><strong>/reset_model</strong></p>
+        <p>Switch between available modes (llama.cpp, ollama, openai). Example: <code>/reset_model</code></p>
         """
         self.chat_history.setHtml(help_message)
         self.help_message_displayed = True
@@ -708,13 +753,37 @@ class Chatbox(QWidget):
                 "model": self.selected_model,
                 "messages": [system_prompt] + self.conversation_history
             }
-        else:
+        elif self.mode == 'llama.cpp':
             full_endpoint = f"{base_url}{self.config['llama.cpp_host']}{path}"
             data = {
                 "messages": [system_prompt] + self.conversation_history
             }
+        elif self.mode == 'openai':
+            openai_url = "https://api.openai.com/v1/chat/completions"
+            api_key = self.config.get('openai_api_key')
+            if not api_key:
+                self.handle_error("OpenAI API key is not set. Please update your configuration.")
+                return
+            
+            if not self.selected_model:
+                self.selected_model = "gpt-4o"
 
-        self.worker = NetworkWorker(self.conversation_history, full_endpoint, data)
+            full_endpoint = openai_url
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            data = {
+                "model": self.selected_model,
+                "messages": [system_prompt] + self.conversation_history
+            }
+        else:
+            self.handle_error("Invalid mode selected. Please check your configuration.")
+            return
+
+        headers = headers if self.mode == 'openai' else {"Content-Type": "application/json"}
+        
+        self.worker = NetworkWorker(self.conversation_history, full_endpoint, data, headers)
         self.worker.response_received.connect(self.handle_response)
         self.worker.error_occurred.connect(self.handle_error)
         self.worker.start()
@@ -858,15 +927,27 @@ class Chatbox(QWidget):
         return None
 
     def display_models_list(self):
-        if self.available_models:
-            self.chat_history.append("<b style='color: yellow;'>Available models from Ollama:</b>")
-            for model in self.available_models:
-                self.chat_history.append(f"<b style='color: green;'>/select_model {model['name']}</b>")
-            self.chat_history.append("<b style='color: yellow;'>Copy and paste a command to select a model and press enter.</b>")
-        else:
-            self.chat_history.append("<b style='color: yellow;'>No available models found.</b>")
-        self.chat_history.moveCursor(QTextCursor.End)
+        ollama_status, _ = self.server_is_reachable()
+        openai_status = bool(self.config.get('openai_api_key'))
 
+        if openai_status:
+            openai_models = ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
+            self.chat_history.append("<b style='color: yellow;'>Available models from OpenAI:</b>")
+            for model in openai_models:
+                self.chat_history.append(f"<b style='color: green;'>/select_model {model}</b>")
+            self.chat_history.append("<b style='color: yellow;'>Copy and paste a command to select a model and press enter.</b>")
+
+        if ollama_status:
+            if self.available_models:
+                self.chat_history.append("<b style='color: yellow;'>Available models from Ollama:</b>")
+                for model in self.available_models:
+                    self.chat_history.append(f"<b style='color: green;'>/select_model {model['name']}</b>")
+                self.chat_history.append("<b style='color: yellow;'>Copy and paste a command to select a model and press enter.</b>")
+            else:
+                self.chat_history.append("<b style='color: yellow;'>No available models found from Ollama.</b>")
+                   
+        self.chat_history.moveCursor(QTextCursor.End)
+    
     def list_models(self, parts):
         self.display_models_list()
 
@@ -874,19 +955,16 @@ class NetworkWorker(QThread):
     response_received = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
 
-    def __init__(self, conversation_history, endpoint, data):
+    def __init__(self, conversation_history, endpoint, data, headers=None):
         super().__init__()
         self.conversation_history = conversation_history
         self.endpoint = endpoint
         self.data = data
+        self.headers = headers if headers else {"Content-Type": "application/json"}
 
     def run(self):
-        headers = {
-            "Content-Type": "application/json"
-        }
-
         try:
-            response = requests.post(self.endpoint, headers=headers, json=self.data)
+            response = requests.post(self.endpoint, headers=self.headers, json=self.data)
             if response.status_code == 200:
                 bot_message = response.json()["choices"][0]["message"]["content"].strip()
                 self.response_received.emit(bot_message)
@@ -896,16 +974,13 @@ class NetworkWorker(QThread):
             self.error_occurred.emit(str(e))
 
 if __name__ == "__main__":
-    # Ensure config.json is up to date
     config = ConfigManager.load_config()
 
-    # Define the expected structure for chat files
     expected_chat_structure = {
         "system_prompt": "",
         "conversation_history": []
     }
 
-    # Ensure all chat files are up to date with the expected structure
     chat_manager = ChatHistoryManager()
     chat_manager.ensure_chat_files_are_up_to_date(expected_chat_structure)
 

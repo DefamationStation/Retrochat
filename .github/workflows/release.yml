@@ -13,11 +13,6 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
-      
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.x'
 
     - name: Create Release
       id: create_release
@@ -28,6 +23,6 @@ jobs:
           retrochat.py
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        
+
     - name: Get release URL
       run: echo "Release created at: ${{ steps.create_release.outputs.upload_url }}"

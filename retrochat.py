@@ -331,7 +331,7 @@ class Chatbox(QWidget):
         llamacpp_online = self.check_server_status(self.config.get("llama.cpp_host", "127.0.0.1:8080"))
         return ollama_online, llamacpp_online
     
-    def reset_mode(self, parts):
+    def reset_model(self, parts):
         if self.mode == 'ollama':
             self.mode = 'llama.cpp'
         elif self.mode == 'llama.cpp':
@@ -421,7 +421,7 @@ class Chatbox(QWidget):
             "/chat": self.manage_chat,
             "/models": self.list_models,
             "/select_model": self.select_model,
-            "/reset_mode": self.reset_mode,
+            "/reset_model": self.reset_model,
             "/help": self.display_help_message,
         }
 
@@ -620,8 +620,8 @@ class Chatbox(QWidget):
         <p><strong>/select_model</strong></p>
         <p>Select a model for the current mode. Example: <code>/select_model gpt-4o</code> for OpenAI or <code>/select_model model_name</code> for Ollama.</p>
         
-        <p><strong>/reset_mode</strong></p>
-        <p>Switch between available modes (llama.cpp, ollama, openai). Example: <code>/reset_mode</code></p>
+        <p><strong>/reset_model</strong></p>
+        <p>Switch between available modes (llama.cpp, ollama, openai). Example: <code>/reset_model</code></p>
         """
         self.chat_history.setHtml(help_message)
         self.help_message_displayed = True
@@ -927,7 +927,17 @@ class Chatbox(QWidget):
         return None
 
     def display_models_list(self):
-        if self.ollama_online:
+        ollama_status, _ = self.server_is_reachable()
+        openai_status = bool(self.config.get('openai_api_key'))
+
+        if openai_status:
+            openai_models = ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
+            self.chat_history.append("<b style='color: yellow;'>Available models from OpenAI:</b>")
+            for model in openai_models:
+                self.chat_history.append(f"<b style='color: green;'>/select_model {model}</b>")
+            self.chat_history.append("<b style='color: yellow;'>Copy and paste a command to select a model and press enter.</b>")
+
+        if ollama_status:
             if self.available_models:
                 self.chat_history.append("<b style='color: yellow;'>Available models from Ollama:</b>")
                 for model in self.available_models:
@@ -935,8 +945,9 @@ class Chatbox(QWidget):
                 self.chat_history.append("<b style='color: yellow;'>Copy and paste a command to select a model and press enter.</b>")
             else:
                 self.chat_history.append("<b style='color: yellow;'>No available models found from Ollama.</b>")
+                   
         self.chat_history.moveCursor(QTextCursor.End)
-
+    
     def list_models(self, parts):
         self.display_models_list()
 

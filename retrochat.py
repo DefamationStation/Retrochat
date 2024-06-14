@@ -4,6 +4,7 @@ import json
 import requests
 import markdown
 import shutil
+import ctypes
 from ctypes import windll, byref, c_int, sizeof
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QScrollArea, QHBoxLayout, QFrame, QLabel
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint
@@ -99,7 +100,6 @@ class ConfigManager:
         new_file_path = os.path.join(os.getcwd(), f"OLD_{filename}")
         if os.path.exists(old_file_path):
             shutil.move(old_file_path, new_file_path)
-            print(f"Renamed file {old_file_path} to {new_file_path}")
 
 class ChatHistoryManager:
     def __init__(self, chat_filename="chat_1.json"):
@@ -175,7 +175,6 @@ class ChatHistoryManager:
         new_file_path = os.path.join(os.getcwd(), f"OLD_{filename}")
         if os.path.exists(old_file_path):
             shutil.move(old_file_path, new_file_path)
-            print(f"Renamed file {old_file_path} to {new_file_path}")
 
     def create_new_file_with_structure(self, filename, structure):
         new_file_path = os.path.join(os.getcwd(), filename)
@@ -290,9 +289,11 @@ class Chatbox(QWidget):
         }
 
         system_prompt = {"role": "system", "content": self.system_prompt if self.system_prompt else "You are a helpful assistant."}
+        selected_model = self.selected_model if self.selected_model else "gpt-4o"
+
         data = {
-            "model": self.selected_model,
-            "messages": [system_prompt] + self.conversation_history
+            "model": selected_model,
+            "messages": [system_prompt] + [{"role": "user", "content": user_message}] + self.conversation_history
         }
 
         self.worker = NetworkWorker(self.conversation_history, openai_url, data, headers)
@@ -358,7 +359,11 @@ class Chatbox(QWidget):
         if openai_status:
             self.mode = 'openai'
             self.chat_history.append("<b style='color: yellow;'>OpenAI mode is selected.</b>")
-        elif ollama_status:
+        else:
+            self.chat_history.append("<b style='color: yellow;'>To use OpenAI, please configure your API key:</b>")
+            self.chat_history.append("<b style='color: green;'>/config openaiapikey your-key-here</b>")
+
+        if ollama_status:
             self.mode = 'ollama'
             self.chat_history.append("<b style='color: yellow;'>Ollama mode is selected.</b>")
         elif llamacpp_status:
@@ -387,23 +392,21 @@ class Chatbox(QWidget):
             self.user_input.clear()
 
     def execute_command(self, command):
-        parts = command.split(maxsplit=3)
+        parts = command.split(maxsplit=2)
         command_key = parts[0]
-        
-        print(f"Executing command: {command_key} with parts: {parts}")
 
         commands = {
             "/config": self.update_config,
             "/chat": self.manage_chat,
             "/models": self.list_models,
-            "/selectmodel": self.selectmodel,
+            "/select_model": self.selectmodel,
             "/resetmodel": self.resetmodel,
             "/help": self.display_help_message,
             "/system_prompt": self.set_system_prompt,
         }
 
         if command_key in commands:
-            if command_key in ["/config", "/selectmodel", "/system_prompt"]:
+            if command_key in ["/config", "/select_model", "/system_prompt"]:
                 if len(parts) >= 2:
                     commands[command_key](parts)
                 else:
@@ -452,26 +455,31 @@ class Chatbox(QWidget):
         if len(parts) == 2:
             model_name = parts[1]
 
-            is_ollama_model = any(model["name"] == model_name for model in self.available_models)
-            
-            if is_ollama_model:
-                self.mode = 'ollama'
-                self.selected_model = model_name
-                ConfigManager.save_config_value('selected_model', model_name)
-                ConfigManager.save_config_value('current_mode', self.mode)
-                self.chat_history.append(f"<b style='color: yellow;'>Ollama mode selected. Model: {model_name}</b>")
-            else:
+            if model_name in ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]:
                 self.mode = 'openai'
+            elif any(model["name"] == model_name for model in self.available_models):
+                self.mode = 'ollama'
+            else:
+                self.mode = 'llama.cpp'
+
+            is_valid_model = False
+
+            if self.mode == 'ollama':
+                is_valid_model = any(model["name"] == model_name for model in self.available_models)
+            elif self.mode == 'openai':
+                valid_openai_models = ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
+                is_valid_model = model_name in valid_openai_models
+
+            if is_valid_model:
                 self.selected_model = model_name
                 ConfigManager.save_config_value('selected_model', model_name)
-                ConfigManager.save_config_value('current_mode', self.mode)
-                self.chat_history.append(f"<b style='color: yellow;'>OpenAI mode selected. Model: {model_name}</b>")
-
-            self.chat_history.clear()
-            self.load_chat_to_display()
-
+                self.chat_history.append(f"<b style='color: yellow;'>Model selected: {model_name}</b>")
+                self.chat_history.clear()
+                self.load_chat_to_display()
+            else:
+                self.display_error(f"Invalid model name: {model_name}. Please choose a valid model.")
         else:
-            self.display_error("Usage: /selectmodel model_name")
+            self.display_error("Usage: /select_model model_name")
 
     def display_error(self, message):
         self.chat_history.append(f"<b style='color: red;'>Error:</b> {message}")
@@ -617,15 +625,16 @@ class Chatbox(QWidget):
         self.chat_history.moveCursor(QTextCursor.End)
 
     def update_config(self, parts):
-        print(f"Updating config with parts: {parts}")  # Debug statement
-
         if len(parts) >= 3:
             key = parts[1]
             value = parts[2]
 
-            print(f"Updating key: {key} with value: {value}")  # Debug statement
-
-            if key == "system_prompt":
+            if key == "openaiapikey":
+                ConfigManager.save_config_value(key, value)
+                self.config[key] = value
+                self.chat_history.append(f"<b style='color: yellow;'>Config updated: {key} = {value}</b>")
+                self.display_welcome_message()
+            elif key == "system_prompt":
                 self.system_prompt = value
                 self.chat_manager.save_chat_history(self.conversation_history, self.system_prompt)
                 self.chat_history.append(f"<b style='color: yellow;'>System prompt updated: {value}</b>")
@@ -644,7 +653,6 @@ class Chatbox(QWidget):
                 self.chat_history.append(f"<b style='color: yellow;'>Config updated: {key} = {value}</b>")
             else:
                 self.display_error(f"Invalid configuration key: {key}")
-
         else:
             self.display_error("Usage: /config <key> <value>")
 
@@ -888,6 +896,31 @@ class Chatbox(QWidget):
             </style>
             """
             return f"{custom_css}<div class='bot-message'>{html_content}</div>"
+        
+    def display_models_list(self):
+        ollama_status, _ = self.server_is_reachable()
+        openai_status = bool(self.config.get('openaiapikey'))
+
+        if openai_status:
+            openai_models = ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
+            self.chat_history.append("<b style='color: yellow;'>Available models from OpenAI:</b>")
+            for model in openai_models:
+                self.chat_history.append(f"<b style='color: green;'>/select_model {model}</b>")
+            self.chat_history.append("<b style='color: yellow;'>Copy and paste a command to select a model and press enter.</b>")
+
+        if ollama_status:
+            if self.available_models:
+                self.chat_history.append("<b style='color: yellow;'>Available models from Ollama:</b>")
+                for model in self.available_models:
+                    self.chat_history.append(f"<b style='color: green;'>/select_model {model['name']}</b>")
+                self.chat_history.append("<b style='color: yellow;'>Copy and paste a command to select a model and press enter.</b>")
+            else:
+                self.chat_history.append("<b style='color: yellow;'>No available models found from Ollama.</b>")
+
+        self.chat_history.moveCursor(QTextCursor.End)
+    
+    def list_models(self, parts):
+        self.display_models_list()
 
 if __name__ == "__main__":
     config = ConfigManager.load_config()

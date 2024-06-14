@@ -250,7 +250,6 @@ class Chatbox(QWidget):
         self.mode = self.config.get('current_mode', 'llama.cpp')
         self.ollama_online, self.llamacpp_online = self.server_is_reachable()
 
-        # Initialize is_full_screen flag
         self.is_full_screen = False
 
         self.initUI()
@@ -265,7 +264,6 @@ class Chatbox(QWidget):
 
         self.setWindowIcon(self.create_transparent_icon())
 
-        # Restore the window state from the config
         self.restore_window_state()
 
     def restore_window_state(self):
@@ -291,7 +289,6 @@ class Chatbox(QWidget):
             self.config['window_state'] = "full_screen"
             self.is_full_screen = True
         elif self.isMaximized():
-            # Save as maximized without changing geometry
             self.config['window_geometry'] = (self.normalGeometry().x(), self.normalGeometry().y(), 
                                               self.normalGeometry().width(), self.normalGeometry().height())
             self.config['window_state'] = "maximized"
@@ -309,7 +306,7 @@ class Chatbox(QWidget):
         self.is_full_screen = True
 
     def exit_full_screen(self):
-        self.setWindowFlags(Qt.Window)  # Restore window flags to include title bar and borders
+        self.setWindowFlags(Qt.Window)
         self.showNormal()
         self.is_full_screen = False
 

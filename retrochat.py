@@ -4,9 +4,26 @@ import json
 import requests
 import markdown
 import shutil
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QScrollArea, QHBoxLayout, QFrame, QLabel, QPushButton, QMessageBox
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint, QRect
-from PyQt5.QtGui import QTextCursor, QFont
+from ctypes import windll, byref, c_int, sizeof
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QScrollArea, QHBoxLayout, QFrame, QLabel
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint
+from PyQt5.QtGui import QTextCursor, QFont, QIcon, QPixmap
+
+
+def set_amoled_black_title_bar(window):
+    if sys.platform == 'win32':
+        hwnd = int(window.winId())
+
+        DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+        DWMWA_BORDER_COLOR = 34
+        DWMWA_CAPTION_COLOR = 35
+        
+        windll.dwmapi.DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, byref(c_int(1)), sizeof(c_int))
+        
+        black_color = 0x000000
+        windll.dwmapi.DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, byref(c_int(black_color)), sizeof(c_int))
+        windll.dwmapi.DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, byref(c_int(black_color)), sizeof(c_int))
+
 
 class ConfigManager:
     CONFIG_FILENAME = "config.json"
@@ -53,10 +70,6 @@ class ConfigManager:
 
     @classmethod
     def check_and_update_config(cls, config):
-        """
-        Update the loaded config to ensure it matches the default configuration.
-        This keeps existing keys if they are correct and only adds missing keys.
-        """
         if isinstance(config, dict):
             updated_config = cls.update_to_match_default(config, cls.DEFAULT_CONFIG)
             if updated_config != config:
@@ -69,9 +82,6 @@ class ConfigManager:
 
     @classmethod
     def update_to_match_default(cls, data, default_structure):
-        """
-        Recursively update the dictionary to match the default structure.
-        """
         if not isinstance(data, dict) or not isinstance(default_structure, dict):
             return default_structure
 
@@ -85,9 +95,6 @@ class ConfigManager:
 
     @staticmethod
     def rename_old_file(filename):
-        """
-        Rename a file with the prefix 'OLD_'.
-        """
         old_file_path = os.path.join(os.getcwd(), filename)
         new_file_path = os.path.join(os.getcwd(), f"OLD_{filename}")
         if os.path.exists(old_file_path):
@@ -125,11 +132,6 @@ class ChatHistoryManager:
         return [], ""
 
     def check_and_update_json_file(self, filename, expected_structure):
-        """
-        Check and update a JSON file to ensure it matches the expected structure.
-        This method tries to keep the existing keys if they are correct and adds missing keys.
-        If it fails to convert the file, it renames it and creates a new one.
-        """
         file_path = os.path.join(os.getcwd(), filename)
         if not os.path.exists(file_path):
             return
@@ -152,9 +154,6 @@ class ChatHistoryManager:
             self.create_new_file_with_structure(filename, expected_structure)
 
     def update_json_structure(self, data, expected_structure):
-        """
-        Recursively update the JSON structure to match the expected structure.
-        """
         if not isinstance(data, dict) or not isinstance(expected_structure, dict):
             return expected_structure
 
@@ -167,17 +166,11 @@ class ChatHistoryManager:
         return updated_data
 
     def ensure_chat_files_are_up_to_date(self, expected_structure):
-        """
-        Ensure all .json chat files in the current directory are up-to-date with the expected structure.
-        """
         json_files = [f for f in os.listdir(os.getcwd()) if f.endswith('.json') and f != ConfigManager.CONFIG_FILENAME]
         for file in json_files:
             self.check_and_update_json_file(file, expected_structure)
 
     def rename_old_file(self, filename):
-        """
-        Rename a file with the prefix 'OLD_'.
-        """
         old_file_path = os.path.join(os.getcwd(), filename)
         new_file_path = os.path.join(os.getcwd(), f"OLD_{filename}")
         if os.path.exists(old_file_path):
@@ -185,17 +178,11 @@ class ChatHistoryManager:
             print(f"Renamed file {old_file_path} to {new_file_path}")
 
     def create_new_file_with_structure(self, filename, structure):
-        """
-        Create a new file with the correct structure.
-        """
         new_file_path = os.path.join(os.getcwd(), filename)
         with open(new_file_path, 'w') as file:
             json.dump(structure, file, indent=4)
 
     def create_new_chat_file(self):
-        """
-        Create a new chat file with the default structure.
-        """
         default_structure = {
             "system_prompt": "",
             "conversation_history": []
@@ -213,65 +200,27 @@ class ChatHistoryManager:
                 return filename
             index += 1
 
-class CustomTitleBar(QWidget):
-    def __init__(self, parent=None, fontsize=14):
-        super().__init__(parent)
-        self.parent_widget = parent
-        self.fontsize = fontsize
-        self.initUI()
+class NetworkWorker(QThread):
+    response_received = pyqtSignal(str)
+    error_occurred = pyqtSignal(str)
 
-    def initUI(self):
-        self.setFixedHeight(30)
-        self.setStyleSheet("background-color: #333333; color: #00FF00;")
-        layout = QHBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
+    def __init__(self, conversation_history, endpoint, data, headers=None):
+        super().__init__()
+        self.conversation_history = conversation_history
+        self.endpoint = endpoint
+        self.data = data
+        self.headers = headers if headers else {"Content-Type": "application/json"}
 
-        self.minimize_button = QPushButton("-")
-        self.minimize_button.clicked.connect(self.parent_widget.showMinimized)
-        self.minimize_button.setFixedSize(30, 30)
-        self.minimize_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(self.fontsize))
-
-        self.fullscreen_button = QPushButton("[ ]")
-        self.fullscreen_button.clicked.connect(self.toggleFullscreen)
-        self.fullscreen_button.setFixedSize(30, 30)
-        self.fullscreen_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(self.fontsize))
-
-        self.close_button = QPushButton("x")
-        self.close_button.clicked.connect(self.parent_widget.close)
-        self.close_button.setFixedSize(30, 30)
-        self.close_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(self.fontsize))
-
-        layout.addStretch()
-        layout.addWidget(self.minimize_button)
-        layout.addWidget(self.fullscreen_button)
-        layout.addWidget(self.close_button)
-
-        self.setLayout(layout)
-
-    def toggleFullscreen(self):
-        if self.parent_widget.isMaximized():
-            self.parent_widget.showNormal()
-        else:
-            self.parent_widget.showMaximized()
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.parent_widget.is_moving = True
-            self.parent_widget.startPos = event.globalPos()
-
-    def mouseMoveEvent(self, event):
-        if self.parent_widget.is_moving:
-            delta = QPoint(event.globalPos() - self.parent_widget.startPos)
-            self.parent_widget.move(self.parent_widget.x() + delta.x(), self.parent_widget.y() + delta.y())
-            self.parent_widget.startPos = event.globalPos()
-
-    def mouseReleaseEvent(self, event):
-        self.parent_widget.is_moving = False
-
-    def update_buttons_fontsize(self, fontsize):
-        self.minimize_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(fontsize))
-        self.fullscreen_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(fontsize))
-        self.close_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(fontsize))
+    def run(self):
+        try:
+            response = requests.post(self.endpoint, headers=self.headers, json=self.data)
+            if response.status_code == 200:
+                bot_message = response.json()["choices"][0]["message"]["content"].strip()
+                self.response_received.emit(bot_message)
+            else:
+                self.error_occurred.emit(f"{response.status_code} - {response.text}")
+        except requests.RequestException as e:
+            self.error_occurred.emit(str(e))
 
 class Chatbox(QWidget):
     def __init__(self):
@@ -302,6 +251,31 @@ class Chatbox(QWidget):
 
         if not self.conversation_history:
             self.display_welcome_message()
+
+        self.setWindowIcon(self.create_transparent_icon())
+
+    def list_models(self, parts=None):
+        if self.mode == 'ollama':
+            if not self.available_models:
+                self.chat_history.append("<b style='color: yellow;'>No models are available from Ollama.</b>")
+            else:
+                self.chat_history.append("<b style='color: yellow;'>Available models from Ollama:</b>")
+                for model in self.available_models:
+                    self.chat_history.append(f"/selectmodel <b style='color: green;'>{model['name']}</b>")
+        elif self.mode == 'openai':
+            self.chat_history.append("<b style='color: yellow;'>gpt-4-o</b>")
+        elif self.mode == 'llama.cpp':
+            self.chat_history.append("<b style='color: yellow;'>Llama.cpp does not list models dynamically in this setup. Please specify the model manually if needed.</b>")
+        else:
+            self.chat_history.append("<b style='color: red;'>Unknown mode. Cannot list models.</b>")
+
+        self.chat_history.moveCursor(QTextCursor.End)
+
+    def create_transparent_icon(self):
+        """Creates a transparent QIcon to replace the default window icon."""
+        pixmap = QPixmap(64, 64)
+        pixmap.fill(Qt.transparent)
+        return QIcon(pixmap)
 
     def send_openai_message(self, user_message):
         api_key = self.config.get('openaiapikey')
@@ -413,8 +387,10 @@ class Chatbox(QWidget):
             self.user_input.clear()
 
     def execute_command(self, command):
-        parts = command.split(maxsplit=1)
+        parts = command.split(maxsplit=3)
         command_key = parts[0]
+        
+        print(f"Executing command: {command_key} with parts: {parts}")
 
         commands = {
             "/config": self.update_config,
@@ -503,14 +479,14 @@ class Chatbox(QWidget):
 
     def initUI(self):
         self.setGeometry(300, 300, 1100, 550)
-        self.setWindowFlags(Qt.FramelessWindowHint)
+        
+        self.setWindowFlags(Qt.Window)
+        
+        self.setWindowTitle(" ")
 
         main_layout = QVBoxLayout()
         chat_layout = QVBoxLayout()
         input_layout = QHBoxLayout()
-
-        self.custom_title_bar = CustomTitleBar(self, self.fontsize)
-        main_layout.addWidget(self.custom_title_bar)
 
         self.chat_history = QTextEdit()
         self.chat_history.setReadOnly(True)
@@ -596,7 +572,7 @@ class Chatbox(QWidget):
                 self.chat_history.append(assistant_message_html)
         self.chat_history.moveCursor(QTextCursor.End)
 
-    def display_help_message(self):
+    def display_help_message(self, parts=None):
         help_message = """
         <p><strong>Available Commands:</strong></p>
 
@@ -638,25 +614,39 @@ class Chatbox(QWidget):
         """
         self.chat_history.setHtml(help_message)
         self.help_message_displayed = True
+        self.chat_history.moveCursor(QTextCursor.End)
 
     def update_config(self, parts):
+        print(f"Updating config with parts: {parts}")  # Debug statement
+
         if len(parts) >= 3:
             key = parts[1]
-            value = parts[2] if len(parts) == 3 else ' '.join(parts[2:])
+            value = parts[2]
+
+            print(f"Updating key: {key} with value: {value}")  # Debug statement
 
             if key == "system_prompt":
                 self.system_prompt = value
                 self.chat_manager.save_chat_history(self.conversation_history, self.system_prompt)
                 self.chat_history.append(f"<b style='color: yellow;'>System prompt updated: {value}</b>")
             elif key in self.config:
+                if key == "fontsize":
+                    try:
+                        value = int(value)
+                    except ValueError:
+                        self.display_error("Font size must be an integer.")
+                        return
+                    self.fontsize = value
+                    self.update_fontsizes()
+
                 ConfigManager.save_config_value(key, value)
                 self.config[key] = value
-                if key == "fontsize":
-                    self.fontsize = int(value)
-                    self.update_fontsizes()
                 self.chat_history.append(f"<b style='color: yellow;'>Config updated: {key} = {value}</b>")
             else:
                 self.display_error(f"Invalid configuration key: {key}")
+
+        else:
+            self.display_error("Usage: /config <key> <value>")
 
     def manage_chat(self, parts):
         if len(parts) >= 3:
@@ -675,21 +665,18 @@ class Chatbox(QWidget):
                 self.chat_history.append(f"<b style='color: yellow;'>Chat saved as {filename}.</b>")
             elif action == "delete":
                 self.chat_manager.set_chat_filename(filename)
-                self.chat_manager.delete_chat_file()
-
                 chat_history_path = os.path.join(os.getcwd(), self.chat_manager.chat_filename)
-                if not os.path.exists(chat_history_path):
+                if os.path.exists(chat_history_path):
+                    os.remove(chat_history_path)
                     self.chat_history.append(f"<b style='color: yellow;'>Chat file {filename} deleted.</b>")
                 else:
-                    self.display_error(f"Failed to delete chat file: {filename}")
-
-                self.chat_manager.set_chat_filename(self.chat_manager.get_next_available_filename())
+                    self.display_error(f"Chat file {filename} does not exist.")
             elif action == "reset":
                 self.reset_chat()
             elif action == "rename" and len(parts) == 4:
-                new_name = self.ensure_json_extension(parts[3])
-                self.chat_manager.rename_chat_file(new_name)
-                self.chat_history.append(f"<b style='color: yellow;'>Chat file renamed to {new_name}.</b>")
+                old_filename = self.ensure_json_extension(parts[2])
+                new_filename = self.ensure_json_extension(parts[3])
+                self.rename_chat_file(old_filename, new_filename)
             elif action == "open":
                 self.open_chat(filename)
             else:
@@ -700,6 +687,25 @@ class Chatbox(QWidget):
             self.list_chat_files()
         else:
             self.display_error(f"Invalid chat command: {parts[0]}")
+
+    def rename_chat_file(self, old_filename, new_filename):
+        old_path = os.path.join(os.getcwd(), old_filename)
+        new_path = os.path.join(os.getcwd(), new_filename)
+        
+        if not os.path.exists(old_path):
+            self.display_error(f"Chat file {old_filename} does not exist.")
+            return
+        
+        if os.path.exists(new_path):
+            self.display_error(f"Chat file {new_filename} already exists.")
+            return
+        
+        try:
+            shutil.move(old_path, new_path)
+            self.chat_manager.set_chat_filename(new_filename)
+            self.chat_history.append(f"<b style='color: yellow;'>Chat file renamed to {new_filename}.</b>")
+        except Exception as e:
+            self.display_error(f"Failed to rename chat file: {str(e)}")
 
     def list_chat_files(self):
         json_files = [f for f in os.listdir(os.getcwd()) if f.endswith('.json') and f != 'config.json']
@@ -737,9 +743,6 @@ class Chatbox(QWidget):
         self.user_input.setFont(QFont("Courier New", fontsize))
         
         self.prompt_label.setStyleSheet(f"color: {self.config['umc']}; font-size: {fontsize}px; font-family: Courier New; margin: 0; padding: 0;")
-        
-        self.custom_title_bar.fontsize = fontsize
-        self.custom_title_bar.update_buttons_fontsize(fontsize)
         
         self.chat_history.setStyleSheet(self.get_chat_style())
         
@@ -886,106 +889,6 @@ class Chatbox(QWidget):
             """
             return f"{custom_css}<div class='bot-message'>{html_content}</div>"
 
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            if self.is_on_border(event.pos()):
-                self.resizing = True
-                self.resize_direction = self.get_resize_direction(event.pos())
-                self.oldPos = event.globalPos()
-            else:
-                self.is_moving = True
-                self.startPos = event.globalPos()
-
-    def mouseMoveEvent(self, event):
-        if self.resizing:
-            self.handle_resize(event)
-        elif self.is_moving:
-            delta = QPoint(event.globalPos() - self.startPos)
-            self.move(self.x() + delta.x(), self.y() + delta.y())
-            self.startPos = event.globalPos()
-
-    def mouseReleaseEvent(self, event):
-        self.is_moving = False
-        self.resizing = False
-
-    def handle_resize(self, event):
-        if self.resizing:
-            diff = event.globalPos() - self.oldPos
-            if self.resize_direction == 'bottom_right':
-                self.resize(self.width() + diff.x(), self.height() + diff.y())
-            elif self.resize_direction == 'bottom':
-                self.resize(self.width(), self.height() + diff.y())
-            elif self.resize_direction == 'right':
-                self.resize(self.width() + diff.x(), self.height())
-            self.oldPos = event.globalPos()
-
-    def is_on_border(self, pos):
-        margin = 10
-        rect = self.rect()
-        bottom_right = QRect(rect.right() - margin, rect.bottom() - margin, margin, margin)
-        bottom = QRect(rect.left(), rect.bottom() - margin, rect.width(), margin)
-        right = QRect(rect.right() - margin, rect.top(), margin, rect.height())
-
-        return bottom_right.contains(pos) or bottom.contains(pos) or right.contains(pos)
-
-    def get_resize_direction(self, pos):
-        margin = 10
-        rect = self.rect()
-        if QRect(rect.right() - margin, rect.bottom() - margin, margin, margin).contains(pos):
-            return 'bottom_right'
-        if QRect(rect.left(), rect.bottom() - margin, rect.width(), margin).contains(pos):
-            return 'bottom'
-        if QRect(rect.right() - margin, rect.top(), margin, rect.height()).contains(pos):
-            return 'right'
-        return None
-
-    def display_models_list(self):
-        ollama_status, _ = self.server_is_reachable()
-        openai_status = bool(self.config.get('openaiapikey'))
-
-        if openai_status:
-            openai_models = ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
-            self.chat_history.append("<b style='color: yellow;'>Available models from OpenAI:</b>")
-            for model in openai_models:
-                self.chat_history.append(f"<b style='color: green;'>/selectmodel {model}</b>")
-            self.chat_history.append("<b style='color: yellow;'>Copy and paste a command to select a model and press enter.</b>")
-
-        if ollama_status:
-            if self.available_models:
-                self.chat_history.append("<b style='color: yellow;'>Available models from Ollama:</b>")
-                for model in self.available_models:
-                    self.chat_history.append(f"<b style='color: green;'>/selectmodel {model['name']}</b>")
-                self.chat_history.append("<b style='color: yellow;'>Copy and paste a command to select a model and press enter.</b>")
-            else:
-                self.chat_history.append("<b style='color: yellow;'>No available models found from Ollama.</b>")
-                   
-        self.chat_history.moveCursor(QTextCursor.End)
-    
-    def list_models(self, parts):
-        self.display_models_list()
-
-class NetworkWorker(QThread):
-    response_received = pyqtSignal(str)
-    error_occurred = pyqtSignal(str)
-
-    def __init__(self, conversation_history, endpoint, data, headers=None):
-        super().__init__()
-        self.conversation_history = conversation_history
-        self.endpoint = endpoint
-        self.data = data
-        self.headers = headers if headers else {"Content-Type": "application/json"}
-
-    def run(self):
-        try:
-            response = requests.post(self.endpoint, headers=self.headers, json=self.data)
-            if response.status_code == 200:
-                bot_message = response.json()["choices"][0]["message"]["content"].strip()
-                self.response_received.emit(bot_message)
-            else:
-                self.error_occurred.emit(f"{response.status_code} - {response.text}")
-        except requests.RequestException as e:
-            self.error_occurred.emit(str(e))
-
 if __name__ == "__main__":
     config = ConfigManager.load_config()
 
@@ -998,6 +901,9 @@ if __name__ == "__main__":
     chat_manager.ensure_chat_files_are_up_to_date(expected_chat_structure)
 
     app = QApplication([])
+
     chatbox = Chatbox()
+    set_amoled_black_title_bar(chatbox)
     chatbox.show()
+
     sys.exit(app.exec_())

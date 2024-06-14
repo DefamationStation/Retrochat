@@ -8,9 +8,6 @@ Retrochat is a simple and lightweight chatbox application running a **single .py
 
 **Please note:** Llama.cpp or any sort of inference isn't included with this app, you will need to run your own server.
 
-## Development
-This application is being actively developed using [Aider](https://aider.chat/),
-
 ## Features
 - **Local Server Integration**: Easily connect to your local llama.cpp server.
 - **Resizable Interface**: Adjust the chatbox size by clicking and dragging near the bottom right corner.
@@ -29,13 +26,52 @@ This application is being actively developed using [Aider](https://aider.chat/),
    - Download the `.exe` file.
    - Run the executable directly from any location.
 
-### Configuration
-- To set or change the `llama.cpp` endpoint server, type:
-  ```bash
-  /config host your_host_ip:port
-  ```
-- Any parameter in the `config.json` file can be modified similarly using the `/config` command followed by the parameter name and its new value.
+Available Commands and Arguments
+Commands
+/config - Update or retrieve configuration settings.
 
+Usage: /config <key> <value>
+Available Keys:
+fontsize: Set the font size.
+baseurl: Set the base URL for API requests.
+openaiapikey: Set the OpenAI API key.
+umc: Set the color of user messages.
+amc: Set the color of assistant messages.
+system_prompt: Set a custom system prompt.
+/chat - Manage chat sessions.
+
+Usage: /chat <action> <filename> [new_name]
+Available Actions:
+new <filename>: Create a new chat file and switch to it.
+save <filename>: Save the current chat history to a specified file.
+delete <filename>: Delete a specified chat file.
+reset: Clear the current chat history.
+rename <old_filename> <new_filename>: Rename a chat file.
+open <filename>: Open an existing chat file.
+list: List all JSON chat files in the current directory.
+/models - List available models from Ollama or OpenAI.
+
+Usage: /models
+/selectmodel - Select a model for the current mode.
+
+Usage: /selectmodel <model_name>
+/resetmodel - Switch between available modes (llama.cpp, ollama, openai).
+
+Usage: /resetmodel
+/help - Display help message with available commands and their usage.
+
+Usage: /help
+/system_prompt - Set a custom system prompt for the chat session.
+
+Usage: /system_prompt <prompt_message>
+Arguments
+<key>: The configuration setting to update or retrieve.
+<value>: The new value for the configuration setting.
+<action>: The action to perform on chat files (new, save, delete, reset, rename, open, list).
+<filename>: The name of the chat file to act upon.
+[new_name]: The new name for the chat file in the rename action.
+<model_name>: The name of the model to select.
+<prompt_message>: The custom system prompt message.
 ## Resources
 - **Detailed Commands and Documentation**: For a comprehensive list of commands and usage details, visit the [Retrochat Wiki](https://github.com/DefamationStation/Retrochat/wiki).
 - **Join Our Community**: Connect with other users and developers on our [Discord](https://discord.gg/dZxjYNyNth).

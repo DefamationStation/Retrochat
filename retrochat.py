@@ -11,17 +11,17 @@ from PyQt5.QtGui import QTextCursor, QFont
 class ConfigManager:
     CONFIG_FILENAME = "config.json"
     DEFAULT_CONFIG = {
-        "base_url": "http://",
-        "ollama_host": "127.0.0.1:11434",
-        "llama.cpp_host": "127.0.0.1:8080",
+        "baseurl": "http://",
+        "ollamahost": "127.0.0.1:11434",
+        "llamacpphost": "127.0.0.1:8080",
         "path": "/v1/chat/completions",
-        "user_message_color": "#00FF00",
-        "assistant_message_color": "#FFBF00",
-        "font_size": 18,
+        "umc": "#00FF00",
+        "amc": "#FFBF00",
+        "fontsize": 18,
         "current_chat_filename": "chat_1.json",
         "selected_model": "",
         "current_mode": "llama.cpp",
-        "openai_api_key": ""
+        "openaiapikey": ""
     }
 
     @classmethod
@@ -214,10 +214,10 @@ class ChatHistoryManager:
             index += 1
 
 class CustomTitleBar(QWidget):
-    def __init__(self, parent=None, font_size=14):
+    def __init__(self, parent=None, fontsize=14):
         super().__init__(parent)
         self.parent_widget = parent
-        self.font_size = font_size
+        self.fontsize = fontsize
         self.initUI()
 
     def initUI(self):
@@ -229,17 +229,17 @@ class CustomTitleBar(QWidget):
         self.minimize_button = QPushButton("-")
         self.minimize_button.clicked.connect(self.parent_widget.showMinimized)
         self.minimize_button.setFixedSize(30, 30)
-        self.minimize_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(self.font_size))
+        self.minimize_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(self.fontsize))
 
         self.fullscreen_button = QPushButton("[ ]")
         self.fullscreen_button.clicked.connect(self.toggleFullscreen)
         self.fullscreen_button.setFixedSize(30, 30)
-        self.fullscreen_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(self.font_size))
+        self.fullscreen_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(self.fontsize))
 
         self.close_button = QPushButton("x")
         self.close_button.clicked.connect(self.parent_widget.close)
         self.close_button.setFixedSize(30, 30)
-        self.close_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(self.font_size))
+        self.close_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(self.fontsize))
 
         layout.addStretch()
         layout.addWidget(self.minimize_button)
@@ -268,17 +268,17 @@ class CustomTitleBar(QWidget):
     def mouseReleaseEvent(self, event):
         self.parent_widget.is_moving = False
 
-    def update_buttons_font_size(self, font_size):
-        self.minimize_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(font_size))
-        self.fullscreen_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(font_size))
-        self.close_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(font_size))
+    def update_buttons_fontsize(self, fontsize):
+        self.minimize_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(fontsize))
+        self.fullscreen_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(fontsize))
+        self.close_button.setStyleSheet("background-color: black; color: #00FF00; font-size: {}px;".format(fontsize))
 
 class Chatbox(QWidget):
     def __init__(self):
         super().__init__()
         self.config = ConfigManager.load_config()
         self.chat_manager = ChatHistoryManager(chat_filename=self.config.get('current_chat_filename', 'chat_1.json'))
-        self.font_size = int(self.config.get("font_size", 18))
+        self.fontsize = int(self.config.get("fontsize", 18))
         self.conversation_history, self.system_prompt = self.chat_manager.load_chat_history()
         self.command_history = []
         self.command_index = -1
@@ -304,7 +304,7 @@ class Chatbox(QWidget):
             self.display_welcome_message()
 
     def send_openai_message(self, user_message):
-        api_key = self.config.get('openai_api_key')
+        api_key = self.config.get('openaiapikey')
         if not api_key:
             self.handle_error("OpenAI API key is not set. Please update your configuration.")
             return
@@ -327,11 +327,11 @@ class Chatbox(QWidget):
         self.worker.start()
 
     def server_is_reachable(self):
-        ollama_online = self.check_server_status(self.config.get("ollama_host", "127.0.0.1:11434"))
-        llamacpp_online = self.check_server_status(self.config.get("llama.cpp_host", "127.0.0.1:8080"))
+        ollama_online = self.check_server_status(self.config.get("ollamahost", "127.0.0.1:11434"))
+        llamacpp_online = self.check_server_status(self.config.get("llamacpphost", "127.0.0.1:8080"))
         return ollama_online, llamacpp_online
     
-    def reset_model(self, parts):
+    def resetmodel(self, parts):
         if self.mode == 'ollama':
             self.mode = 'llama.cpp'
         elif self.mode == 'llama.cpp':
@@ -354,9 +354,9 @@ class Chatbox(QWidget):
 
     def load_models_from_ollama(self):
         try:
-            base_url = self.config.get("base_url", "http://")
-            host = self.config.get("ollama_host", "127.0.0.1:11434")
-            full_url = base_url + host
+            baseurl = self.config.get("baseurl", "http://")
+            host = self.config.get("ollamahost", "127.0.0.1:11434")
+            full_url = baseurl + host
             response = requests.get(f"{full_url}/api/tags")
             response.raise_for_status()
             models_info = response.json()
@@ -366,7 +366,7 @@ class Chatbox(QWidget):
 
     def display_welcome_message(self):
         ollama_status, llamacpp_status = self.server_is_reachable()
-        openai_status = bool(self.config.get('openai_api_key'))
+        openai_status = bool(self.config.get('openaiapikey'))
 
         ollama_status_message = f"<b style='color: {'green' if ollama_status else 'red'};'>Ollama host: {'Online' if ollama_status else 'Offline'}</b>"
         llamacpp_status_message = f"<b style='color: {'green' if llamacpp_status else 'red'};'>Llama.cpp host: {'Online' if llamacpp_status else 'Offline'}</b>"
@@ -420,23 +420,36 @@ class Chatbox(QWidget):
             "/config": self.update_config,
             "/chat": self.manage_chat,
             "/models": self.list_models,
-            "/select_model": self.select_model,
-            "/reset_model": self.reset_model,
+            "/selectmodel": self.selectmodel,
+            "/resetmodel": self.resetmodel,
             "/help": self.display_help_message,
+            "/system_prompt": self.set_system_prompt,
         }
 
         if command_key in commands:
-            if command_key == "/config":
-                config_parts = command.split(maxsplit=2)
-                if len(config_parts) == 3:
-                    commands[command_key](config_parts)
+            if command_key in ["/config", "/selectmodel", "/system_prompt"]:
+                if len(parts) >= 2:
+                    commands[command_key](parts)
                 else:
-                    self.display_error("Usage: /config <key> <value>")
+                    self.display_error(f"Usage: {command_key} requires an argument.")
             else:
-                parts = command.split(maxsplit=2)
                 commands[command_key](parts)
         else:
             self.display_error(f"Invalid command: {command}")
+
+    def set_system_prompt(self, parts):
+        if len(parts) < 2:
+            self.display_error("Usage: /system_prompt Your prompt message")
+            return
+        
+        prompt_message = parts[1]
+        
+        self.system_prompt = prompt_message
+        
+        self.chat_manager.save_chat_history(self.conversation_history, self.system_prompt)
+        
+        self.chat_history.append(f"<b style='color: yellow;'>System prompt updated to: {prompt_message}</b>")
+        self.chat_history.moveCursor(QTextCursor.End)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Up:
@@ -459,7 +472,7 @@ class Chatbox(QWidget):
         else:
             super().keyPressEvent(event)
 
-    def select_model(self, parts):
+    def selectmodel(self, parts):
         if len(parts) == 2:
             model_name = parts[1]
 
@@ -482,7 +495,7 @@ class Chatbox(QWidget):
             self.load_chat_to_display()
 
         else:
-            self.display_error("Usage: /select_model model_name")
+            self.display_error("Usage: /selectmodel model_name")
 
     def display_error(self, message):
         self.chat_history.append(f"<b style='color: red;'>Error:</b> {message}")
@@ -496,12 +509,12 @@ class Chatbox(QWidget):
         chat_layout = QVBoxLayout()
         input_layout = QHBoxLayout()
 
-        self.custom_title_bar = CustomTitleBar(self, self.font_size)
+        self.custom_title_bar = CustomTitleBar(self, self.fontsize)
         main_layout.addWidget(self.custom_title_bar)
 
         self.chat_history = QTextEdit()
         self.chat_history.setReadOnly(True)
-        self.chat_history.setFont(QFont("Courier New", self.font_size))
+        self.chat_history.setFont(QFont("Courier New", self.fontsize))
         self.chat_history.setStyleSheet(self.get_chat_style())
 
         self.chat_scroll_area = QScrollArea()
@@ -517,7 +530,7 @@ class Chatbox(QWidget):
         self.user_input = QLineEdit()
         self.user_input.setPlaceholderText("Type your message here...")
         self.user_input.returnPressed.connect(self.process_input)
-        self.user_input.setFont(QFont("Courier New", self.font_size))
+        self.user_input.setFont(QFont("Courier New", self.fontsize))
         self.user_input.setStyleSheet(self.get_input_style())
 
         input_layout.addWidget(self.prompt_label, 0, Qt.AlignLeft)
@@ -538,7 +551,7 @@ class Chatbox(QWidget):
                 background-color: black;
                 color: #00FF00;
                 font-family: 'Courier New', Courier, monospace;
-                font-size: {self.font_size}px;
+                font-size: {self.fontsize}px;
                 border: none;
             }}
             QScrollBar:vertical {{
@@ -562,13 +575,13 @@ class Chatbox(QWidget):
         """
 
     def get_chat_style(self):
-        return f"padding: 5px; background-color: #000000; color: {self.config['user_message_color']};"
+        return f"padding: 5px; background-color: #000000; color: {self.config['umc']};"
 
     def get_prompt_style(self):
-        return f"color: {self.config['user_message_color']}; font-size: {self.font_size}px; font-family: Courier New; margin: 0; padding: 0;"
+        return f"color: {self.config['umc']}; font-size: {self.fontsize}px; font-family: Courier New; margin: 0; padding: 0;"
 
     def get_input_style(self):
-        return f"margin: 0; padding: 0; background-color: #000000; color: {self.config['user_message_color']}; border: none;"
+        return f"margin: 0; padding: 0; background-color: #000000; color: {self.config['umc']}; border: none;"
 
     def load_chat_to_display(self):
         self.chat_history.clear()
@@ -592,11 +605,11 @@ class Chatbox(QWidget):
         <p><strong>Usage:</strong> <code>/config &lt;key&gt; &lt;value&gt;</code></p>
         <p><strong>Available Keys:</strong></p>
         <ul>
-            <li><code>font_size</code>: Adjust the size of the font. Example: <code>/config font_size 18</code></li>
-            <li><code>base_url</code>: Set the base URL for API requests. Example: <code>/config base_url http://new-url.com</code></li>
-            <li><code>openai_api_key</code>: Set your OpenAI API key. Example: <code>/config openai_api_key YOUR_API_KEY</code></li>
-            <li><code>user_message_color</code>: Change the color of user messages. Example: <code>/config user_message_color #00FF00</code></li>
-            <li><code>assistant_message_color</code>: Change the color of assistant messages. Example: <code>/config assistant_message_color #FFBF00</code></li>
+            <li><code>fontsize</code>: Adjust the size of the font. Example: <code>/config fontsize 18</code></li>
+            <li><code>baseurl</code>: Set the base URL for API requests. Example: <code>/config baseurl http://new-url.com</code></li>
+            <li><code>openaiapikey</code>: Set your OpenAI API key. Example: <code>/config openaiapikey YOUR_API_KEY</code></li>
+            <li><code>umc</code>: Change the color of user messages. Example: <code>/config umc #00FF00</code></li>
+            <li><code>amc</code>: Change the color of assistant messages. Example: <code>/config amc #FFBF00</code></li>
             <li><code>system_prompt</code>: Set a custom system prompt for the chat session. Example: <code>/config system_prompt "Your prompt here"</code></li>
         </ul>
 
@@ -617,11 +630,11 @@ class Chatbox(QWidget):
         <p><strong>/models</strong></p>
         <p>List available models from Ollama or OpenAI (depending on the current mode).</p>
 
-        <p><strong>/select_model</strong></p>
-        <p>Select a model for the current mode. Example: <code>/select_model gpt-4o</code> for OpenAI or <code>/select_model model_name</code> for Ollama.</p>
+        <p><strong>/selectmodel</strong></p>
+        <p>Select a model for the current mode. Example: <code>/selectmodel gpt-4o</code> for OpenAI or <code>/selectmodel model_name</code> for Ollama.</p>
         
-        <p><strong>/reset_model</strong></p>
-        <p>Switch between available modes (llama.cpp, ollama, openai). Example: <code>/reset_model</code></p>
+        <p><strong>/resetmodel</strong></p>
+        <p>Switch between available modes (llama.cpp, ollama, openai). Example: <code>/resetmodel</code></p>
         """
         self.chat_history.setHtml(help_message)
         self.help_message_displayed = True
@@ -638,9 +651,9 @@ class Chatbox(QWidget):
             elif key in self.config:
                 ConfigManager.save_config_value(key, value)
                 self.config[key] = value
-                if key == "font_size":
-                    self.font_size = int(value)
-                    self.update_font_sizes()
+                if key == "fontsize":
+                    self.fontsize = int(value)
+                    self.update_fontsizes()
                 self.chat_history.append(f"<b style='color: yellow;'>Config updated: {key} = {value}</b>")
             else:
                 self.display_error(f"Invalid configuration key: {key}")
@@ -716,17 +729,17 @@ class Chatbox(QWidget):
             filename += '.json'
         return filename
 
-    def update_font_sizes(self):
-        font_size = int(self.font_size)
+    def update_fontsizes(self):
+        fontsize = int(self.fontsize)
         
-        self.chat_history.setFont(QFont("Courier New", font_size))
+        self.chat_history.setFont(QFont("Courier New", fontsize))
         
-        self.user_input.setFont(QFont("Courier New", font_size))
+        self.user_input.setFont(QFont("Courier New", fontsize))
         
-        self.prompt_label.setStyleSheet(f"color: {self.config['user_message_color']}; font-size: {font_size}px; font-family: Courier New; margin: 0; padding: 0;")
+        self.prompt_label.setStyleSheet(f"color: {self.config['umc']}; font-size: {fontsize}px; font-family: Courier New; margin: 0; padding: 0;")
         
-        self.custom_title_bar.font_size = font_size
-        self.custom_title_bar.update_buttons_font_size(font_size)
+        self.custom_title_bar.fontsize = fontsize
+        self.custom_title_bar.update_buttons_fontsize(fontsize)
         
         self.chat_history.setStyleSheet(self.get_chat_style())
         
@@ -742,25 +755,25 @@ class Chatbox(QWidget):
         self.conversation_history.append({"role": "user", "content": user_message})
         self.chat_manager.save_chat_history(self.conversation_history, self.system_prompt)
 
-        base_url = self.config['base_url']
+        baseurl = self.config['baseurl']
         path = self.config['path']
 
         system_prompt = {"role": "system", "content": self.system_prompt if self.system_prompt else "You are a helpful assistant."}
 
         if self.mode == 'ollama':
-            full_endpoint = f"{base_url}{self.config['ollama_host']}{path}"
+            full_endpoint = f"{baseurl}{self.config['ollamahost']}{path}"
             data = {
                 "model": self.selected_model,
                 "messages": [system_prompt] + self.conversation_history
             }
         elif self.mode == 'llama.cpp':
-            full_endpoint = f"{base_url}{self.config['llama.cpp_host']}{path}"
+            full_endpoint = f"{baseurl}{self.config['llamacpphost']}{path}"
             data = {
                 "messages": [system_prompt] + self.conversation_history
             }
         elif self.mode == 'openai':
             openai_url = "https://api.openai.com/v1/chat/completions"
-            api_key = self.config.get('openai_api_key')
+            api_key = self.config.get('openaiapikey')
             if not api_key:
                 self.handle_error("OpenAI API key is not set. Please update your configuration.")
                 return
@@ -806,7 +819,7 @@ class Chatbox(QWidget):
             custom_css = f"""
             <style>
                 div.user-message {{
-                    color: {self.config['user_message_color']};
+                    color: {self.config['umc']};
                     font-family: 'Courier New';
                     background-color: #000000;
                     margin: 0;
@@ -814,7 +827,7 @@ class Chatbox(QWidget):
                 }}
                 pre, code {{
                     background-color: #333333;
-                    color: {self.config['user_message_color']};
+                    color: {self.config['umc']};
                     border-radius: 4px;
                     padding: 5px;
                     margin: 0;
@@ -824,14 +837,14 @@ class Chatbox(QWidget):
                     border-collapse: collapse;
                 }}
                 th, td {{
-                    border: 1px solid {self.config['user_message_color']};
+                    border: 1px solid {self.config['umc']};
                     padding: 3px;
                 }}
                 blockquote {{
-                    border-left: 4px solid {self.config['user_message_color']};
+                    border-left: 4px solid {self.config['umc']};
                     margin: 5px 0;
                     padding-left: 10px;
-                    color: {self.config['user_message_color']};
+                    color: {self.config['umc']};
                     background-color: #222222;
                 }}
             </style>
@@ -841,7 +854,7 @@ class Chatbox(QWidget):
             custom_css = f"""
             <style>
                 div.bot-message {{
-                    color: {self.config['assistant_message_color']};
+                    color: {self.config['amc']};
                     font-family: 'Courier New';
                     background-color: #000000;
                     margin: 0;
@@ -849,7 +862,7 @@ class Chatbox(QWidget):
                 }}
                 pre, code {{
                     background-color: #333333;
-                    color: {self.config['assistant_message_color']};
+                    color: {self.config['amc']};
                     border-radius: 4px;
                     padding: 5px;
                     margin: 0;
@@ -859,14 +872,14 @@ class Chatbox(QWidget):
                     border-collapse: collapse.
                 }}
                 th, td {{
-                    border: 1px solid {self.config['assistant_message_color']};
+                    border: 1px solid {self.config['amc']};
                     padding: 3px;
                 }}
                 blockquote {{
-                    border-left: 4px solid {self.config['assistant_message_color']};
+                    border-left: 4px solid {self.config['amc']};
                     margin: 5px 0;
                     padding-left: 10px;
-                    color: {self.config['assistant_message_color']};
+                    color: {self.config['amc']};
                     background-color: #222222;
                 }}
             </style>
@@ -928,20 +941,20 @@ class Chatbox(QWidget):
 
     def display_models_list(self):
         ollama_status, _ = self.server_is_reachable()
-        openai_status = bool(self.config.get('openai_api_key'))
+        openai_status = bool(self.config.get('openaiapikey'))
 
         if openai_status:
             openai_models = ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
             self.chat_history.append("<b style='color: yellow;'>Available models from OpenAI:</b>")
             for model in openai_models:
-                self.chat_history.append(f"<b style='color: green;'>/select_model {model}</b>")
+                self.chat_history.append(f"<b style='color: green;'>/selectmodel {model}</b>")
             self.chat_history.append("<b style='color: yellow;'>Copy and paste a command to select a model and press enter.</b>")
 
         if ollama_status:
             if self.available_models:
                 self.chat_history.append("<b style='color: yellow;'>Available models from Ollama:</b>")
                 for model in self.available_models:
-                    self.chat_history.append(f"<b style='color: green;'>/select_model {model['name']}</b>")
+                    self.chat_history.append(f"<b style='color: green;'>/selectmodel {model['name']}</b>")
                 self.chat_history.append("<b style='color: yellow;'>Copy and paste a command to select a model and press enter.</b>")
             else:
                 self.chat_history.append("<b style='color: yellow;'>No available models found from Ollama.</b>")

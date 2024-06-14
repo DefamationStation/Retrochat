@@ -26,52 +26,76 @@ Retrochat is a simple and lightweight chatbox application running a **single .py
    - Download the `.exe` file.
    - Run the executable directly from any location.
 
-Available Commands and Arguments
-Commands
-/config - Update or retrieve configuration settings.
+# Retrochat Command Reference
 
-Usage: /config <key> <value>
-Available Keys:
-fontsize: Set the font size.
-baseurl: Set the base URL for API requests.
-openaiapikey: Set the OpenAI API key.
-umc: Set the color of user messages.
-amc: Set the color of assistant messages.
-system_prompt: Set a custom system prompt.
-/chat - Manage chat sessions.
+## Available Commands and Arguments
 
-Usage: /chat <action> <filename> [new_name]
-Available Actions:
-new <filename>: Create a new chat file and switch to it.
-save <filename>: Save the current chat history to a specified file.
-delete <filename>: Delete a specified chat file.
-reset: Clear the current chat history.
-rename <old_filename> <new_filename>: Rename a chat file.
-open <filename>: Open an existing chat file.
-list: List all JSON chat files in the current directory.
-/models - List available models from Ollama or OpenAI.
+### Configuration Commands
 
-Usage: /models
-/selectmodel - Select a model for the current mode.
+1. **/config**
+   - **Description**: Update or retrieve configuration settings.
+   - **Usage**: `/config <key> <value>`
+   - **Available Keys**:
+     - `fontsize`: Set the font size.
+       - Example: `/config fontsize 18`
+     - `baseurl`: Set the base URL for API requests.
+       - Example: `/config baseurl http://new-url.com`
+     - `openaiapikey`: Set the OpenAI API key.
+       - Example: `/config openaiapikey YOUR_API_KEY`
+     - `umc`: Set the color of user messages.
+       - Example: `/config umc #00FF00`
+     - `amc`: Set the color of assistant messages.
+       - Example: `/config amc #FFBF00`
+     - `system_prompt`: Set a custom system prompt.
+       - Example: `/config system_prompt "Your prompt here"`
 
-Usage: /selectmodel <model_name>
-/resetmodel - Switch between available modes (llama.cpp, ollama, openai).
+### Chat Management Commands
 
-Usage: /resetmodel
-/help - Display help message with available commands and their usage.
+2. **/chat**
+   - **Description**: Manage chat sessions.
+   - **Usage**: `/chat <action> <filename> [new_name]`
+   - **Available Actions**:
+     - `new <filename>`: Create and switch to a new chat file.
+       - Example: `/chat new my_chat.json`
+     - `save <filename>`: Save the current chat history to a specified file.
+       - Example: `/chat save my_chat_backup.json`
+     - `delete <filename>`: Permanently delete a specified chat file.
+       - Example: `/chat delete old_chat.json`
+     - `reset`: Clear the current chat history.
+       - Example: `/chat reset`
+     - `rename <old_filename> <new_filename>`: Rename a chat file.
+       - Example: `/chat rename chat_1.json new_chat_name.json`
+     - `open <filename>`: Open and load an existing chat file.
+       - Example: `/chat open my_chat.json`
+     - `list`: List all JSON chat files in the current directory.
+       - Example: `/chat list`
 
-Usage: /help
-/system_prompt - Set a custom system prompt for the chat session.
+### Model Management Commands
 
-Usage: /system_prompt <prompt_message>
-Arguments
-<key>: The configuration setting to update or retrieve.
-<value>: The new value for the configuration setting.
-<action>: The action to perform on chat files (new, save, delete, reset, rename, open, list).
-<filename>: The name of the chat file to act upon.
-[new_name]: The new name for the chat file in the rename action.
-<model_name>: The name of the model to select.
-<prompt_message>: The custom system prompt message.
+3. **/models**
+   - **Description**: List available models from Ollama or OpenAI (depending on the current mode).
+   - **Usage**: `/models`
+
+4. **/selectmodel**
+   - **Description**: Select a model for the current mode.
+   - **Usage**: `/selectmodel <model_name>`
+   - **Example**: `/selectmodel gpt-4-turbo`
+
+5. **/resetmodel**
+   - **Description**: Switch between available modes (`llama.cpp`, `ollama`, `openai`).
+   - **Usage**: `/resetmodel`
+
+### Utility Commands
+
+6. **/help**
+   - **Description**: Display help message with available commands and their usage.
+   - **Usage**: `/help`
+
+7. **/system_prompt**
+   - **Description**: Set a custom system prompt for the chat session.
+   - **Usage**: `/system_prompt <prompt_message>`
+   - **Example**: `/system_prompt "Your custom prompt message"`
+
 ## Resources
 - **Detailed Commands and Documentation**: For a comprehensive list of commands and usage details, visit the [Retrochat Wiki](https://github.com/DefamationStation/Retrochat/wiki).
 - **Join Our Community**: Connect with other users and developers on our [Discord](https://discord.gg/dZxjYNyNth).

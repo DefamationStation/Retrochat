@@ -253,6 +253,51 @@ class Chatbox(QWidget):
 
         self.setWindowIcon(self.create_transparent_icon())
 
+        # Start in windowed mode, so no need to call enter_full_screen here
+        self.is_full_screen = False
+
+    def enter_full_screen(self):
+        self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
+        self.showFullScreen()
+        self.is_full_screen = True
+
+    def exit_full_screen(self):
+        self.setWindowFlags(Qt.Window)  # Restore window flags to include title bar and borders
+        self.showNormal()
+        self.is_full_screen = False
+
+    def toggle_full_screen(self):
+        if self.is_full_screen:
+            self.exit_full_screen()
+        else:
+            self.enter_full_screen()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Up:
+            if self.command_history:
+                if self.command_index == -1:
+                    self.command_index = len(self.command_history) - 1
+                else:
+                    self.command_index = max(0, self.command_index - 1)
+                self.user_input.setText(self.command_history[self.command_index])
+        elif event.key() == Qt.Key_Down:
+            if self.command_index != -1:
+                self.command_index = min(len(self.command_history), self.command_index + 1)
+                if self.command_index < len(self.command_history):
+                    self.user_input.setText(self.command_history[self.command_index])
+                else:
+                    self.user_input.clear()
+                    self.command_index = -1
+        elif event.key() == Qt.Key_Enter or event.key() == Qt.Key_Return:
+            self.process_input()
+        elif event.key() == Qt.Key_Escape:
+            if self.is_full_screen:
+                self.exit_full_screen()
+        elif event.key() == Qt.Key_F11:
+            self.toggle_full_screen()
+        else:
+            super().keyPressEvent(event)
+
     def list_models(self, parts=None):
         if self.mode == 'ollama':
             if not self.available_models:
@@ -429,27 +474,6 @@ class Chatbox(QWidget):
         
         self.chat_history.append(f"<b style='color: yellow;'>System prompt updated to: {prompt_message}</b>")
         self.chat_history.moveCursor(QTextCursor.End)
-
-    def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Up:
-            if self.command_history:
-                if self.command_index == -1:
-                    self.command_index = len(self.command_history) - 1
-                else:
-                    self.command_index = max(0, self.command_index - 1)
-                self.user_input.setText(self.command_history[self.command_index])
-        elif event.key() == Qt.Key_Down:
-            if self.command_index != -1:
-                self.command_index = min(len(self.command_history), self.command_index + 1)
-                if self.command_index < len(self.command_history):
-                    self.user_input.setText(self.command_history[self.command_index])
-                else:
-                    self.user_input.clear()
-                    self.command_index = -1
-        elif event.key() == Qt.Key_Enter or event.key() == Qt.Key_Return:
-            self.process_input()
-        else:
-            super().keyPressEvent(event)
 
     def selectmodel(self, parts):
         if len(parts) == 2:

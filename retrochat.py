@@ -39,8 +39,10 @@ class ConfigManager:
         "current_chat_filename": "chat_1.json",
         "selected_model": "",
         "current_mode": "llama.cpp",
-        "openaiapikey": ""
-    }
+        "openaiapikey": "",
+        "window_geometry": None,
+        "window_state": "normal"
+}
 
     @classmethod
     def load_config(cls):
@@ -62,6 +64,13 @@ class ConfigManager:
         config_path = os.path.join(os.getcwd(), cls.CONFIG_FILENAME)
         with open(config_path, 'w') as config_file:
             json.dump(config, config_file, indent=4)
+
+    @classmethod
+    def save_window_state(cls, geometry, state):
+        config = cls.load_config()
+        config['window_geometry'] = geometry
+        config['window_state'] = state
+        cls.save_config(config)
 
     @classmethod
     def save_config_value(cls, key, value):
@@ -241,6 +250,9 @@ class Chatbox(QWidget):
         self.mode = self.config.get('current_mode', 'llama.cpp')
         self.ollama_online, self.llamacpp_online = self.server_is_reachable()
 
+        # Initialize is_full_screen flag
+        self.is_full_screen = False
+
         self.initUI()
 
         if self.ollama_online:
@@ -253,8 +265,43 @@ class Chatbox(QWidget):
 
         self.setWindowIcon(self.create_transparent_icon())
 
-        # Start in windowed mode, so no need to call enter_full_screen here
-        self.is_full_screen = False
+        # Restore the window state from the config
+        self.restore_window_state()
+
+    def restore_window_state(self):
+        """Restore the window's last state from the config."""
+        geometry = self.config.get('window_geometry')
+        is_maximized = self.config.get('window_state', "normal") == "maximized"
+        full_screen = self.config.get('is_full_screen', False)
+
+        if geometry:
+            self.setGeometry(*geometry)
+
+        if is_maximized:
+            self.showMaximized()
+        elif full_screen:
+            self.enter_full_screen()
+        else:
+            self.showNormal()
+
+    def save_window_state(self):
+        """Save the window's current state to the config."""
+        if self.isFullScreen():
+            self.config['window_geometry'] = (self.x(), self.y(), self.width(), self.height())
+            self.config['window_state'] = "full_screen"
+            self.is_full_screen = True
+        elif self.isMaximized():
+            # Save as maximized without changing geometry
+            self.config['window_geometry'] = (self.normalGeometry().x(), self.normalGeometry().y(), 
+                                              self.normalGeometry().width(), self.normalGeometry().height())
+            self.config['window_state'] = "maximized"
+            self.is_full_screen = False
+        else:
+            self.config['window_geometry'] = (self.x(), self.y(), self.width(), self.height())
+            self.config['window_state'] = "normal"
+            self.is_full_screen = False
+
+        ConfigManager.save_config(self.config)
 
     def enter_full_screen(self):
         self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
@@ -297,6 +344,11 @@ class Chatbox(QWidget):
             self.toggle_full_screen()
         else:
             super().keyPressEvent(event)
+
+    def closeEvent(self, event):
+        """Handle window close event to save state before closing."""
+        self.save_window_state()
+        event.accept()
 
     def list_models(self, parts=None):
         if self.mode == 'ollama':

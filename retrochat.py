@@ -36,9 +36,9 @@ class ConfigManager:
         "umc": "#00FF00",
         "amc": "#FFBF00",
         "fontsize": 18,
-        "current_chat_filename": "chat_1.json",
+        "current_chat_filename": "",
         "selected_model": "",
-        "current_mode": "llama.cpp",
+        "current_mode": "",
         "openaiapikey": "",
         "window_geometry": None,
         "window_state": "normal"
@@ -234,7 +234,21 @@ class Chatbox(QWidget):
     def __init__(self):
         super().__init__()
         self.config = ConfigManager.load_config()
-        self.chat_manager = ChatHistoryManager(chat_filename=self.config.get('current_chat_filename', 'chat_1.json'))
+
+        # Ensure default values if not present
+        current_chat_filename = self.config.get('current_chat_filename', 'chat_1.json')
+        if not current_chat_filename:
+            current_chat_filename = 'chat_1.json'
+            ConfigManager.save_config_value('current_chat_filename', current_chat_filename)
+        
+        self.selected_model = self.config.get('selected_model', "")
+        self.mode = self.config.get('current_mode', "llama.cpp")
+
+        self.chat_manager = ChatHistoryManager(chat_filename=current_chat_filename)
+
+        # Ensure the chat file exists or create it
+        self.ensure_chat_file_exists(current_chat_filename)
+
         self.fontsize = int(self.config.get("fontsize", 18))
         self.conversation_history, self.system_prompt = self.chat_manager.load_chat_history()
         self.command_history = []
@@ -245,9 +259,7 @@ class Chatbox(QWidget):
         self.resizing = False
         self.resize_direction = None
         self.oldPos = QPoint(0, 0)
-        self.selected_model = self.config.get('selected_model')
         self.available_models = []
-        self.mode = self.config.get('current_mode', 'llama.cpp')
         self.ollama_online, self.llamacpp_online = self.server_is_reachable()
 
         self.is_full_screen = False
@@ -265,6 +277,15 @@ class Chatbox(QWidget):
         self.setWindowIcon(self.create_transparent_icon())
 
         self.restore_window_state()
+
+    def ensure_chat_file_exists(self, filename):
+        """Ensure the specified chat file exists or create it if it doesn't."""
+        if not os.path.exists(filename):
+            default_structure = {
+                "system_prompt": "",
+                "conversation_history": []
+            }
+            self.chat_manager.create_new_file_with_structure(filename, default_structure)
 
     def restore_window_state(self):
         """Restore the window's last state from the config."""
@@ -348,6 +369,11 @@ class Chatbox(QWidget):
     def closeEvent(self, event):
         """Handle window close event to save state before closing."""
         self.save_window_state()
+
+        ConfigManager.save_config_value('selected_model', self.selected_model)
+        ConfigManager.save_config_value('current_mode', self.mode)
+        ConfigManager.save_config_value('current_chat_filename', self.chat_manager.chat_filename)
+
         event.accept()
 
     def list_models(self, parts=None):
@@ -549,6 +575,7 @@ class Chatbox(QWidget):
             if is_valid_model:
                 self.selected_model = model_name
                 ConfigManager.save_config_value('selected_model', model_name)
+                ConfigManager.save_config_value('current_mode', self.mode)
                 self.chat_history.append(f"<b style='color: yellow;'>Model selected: {model_name}</b>")
                 self.chat_history.clear()
                 self.load_chat_to_display()

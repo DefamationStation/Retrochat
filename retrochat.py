@@ -273,7 +273,10 @@ class Chatbox(QWidget):
         full_screen = self.config.get('is_full_screen', False)
 
         if geometry:
-            self.setGeometry(*geometry)
+            x, y, width, height = geometry
+
+            adjusted_y = y + 40
+            self.setGeometry(x, adjusted_y, width, height)
 
         if is_maximized:
             self.showMaximized()
@@ -289,8 +292,8 @@ class Chatbox(QWidget):
             self.config['window_state'] = "full_screen"
             self.is_full_screen = True
         elif self.isMaximized():
-            self.config['window_geometry'] = (self.normalGeometry().x(), self.normalGeometry().y(), 
-                                              self.normalGeometry().width(), self.normalGeometry().height())
+            normal_geom = self.normalGeometry()
+            self.config['window_geometry'] = (normal_geom.x(), normal_geom.y(), normal_geom.width(), normal_geom.height())
             self.config['window_state'] = "maximized"
             self.is_full_screen = False
         else:

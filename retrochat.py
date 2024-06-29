@@ -6,7 +6,7 @@ import markdown
 import shutil
 import ctypes
 from ctypes import windll, byref, c_int, sizeof
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QScrollArea, QHBoxLayout, QFrame, QLabel
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QLineEdit, QScrollArea, QHBoxLayout, QFrame, QLabel, QPushButton, QDialog, QFormLayout, QComboBox, QSpinBox
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint
 from PyQt5.QtGui import QTextCursor, QFont, QIcon, QPixmap
 
@@ -18,9 +18,9 @@ def set_amoled_black_title_bar(window):
         DWMWA_USE_IMMERSIVE_DARK_MODE = 20
         DWMWA_BORDER_COLOR = 34
         DWMWA_CAPTION_COLOR = 35
-        
+
         windll.dwmapi.DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, byref(c_int(1)), sizeof(c_int))
-        
+
         black_color = 0x000000
         windll.dwmapi.DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, byref(c_int(black_color)), sizeof(c_int))
         windll.dwmapi.DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, byref(c_int(black_color)), sizeof(c_int))
@@ -33,8 +33,8 @@ class ConfigManager:
         "ollamahost": "192.168.1.82:11434",
         "llamacpphost": "192.168.1.82:8080",
         "path": "/v1/chat/completions",
-        "umc": "#00FF00",
-        "amc": "#FFBF00",
+        "user_color": "#00FF00",
+        "assistant_color": "#FFBF00",
         "fontsize": 18,
         "current_chat_filename": "",
         "selected_model": "",
@@ -42,7 +42,7 @@ class ConfigManager:
         "openaiapikey": "",
         "window_geometry": None,
         "window_state": "normal"
-}
+    }
 
     @classmethod
     def load_config(cls):
@@ -109,6 +109,7 @@ class ConfigManager:
         new_file_path = os.path.join(os.getcwd(), f"OLD_{filename}")
         if os.path.exists(old_file_path):
             shutil.move(old_file_path, new_file_path)
+
 
 class ChatHistoryManager:
     def __init__(self, chat_filename="chat_1.json"):
@@ -208,6 +209,7 @@ class ChatHistoryManager:
                 return filename
             index += 1
 
+
 class NetworkWorker(QThread):
     response_received = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
@@ -230,6 +232,110 @@ class NetworkWorker(QThread):
         except requests.RequestException as e:
             self.error_occurred.emit(str(e))
 
+
+class OptionsDialog(QDialog):
+    def __init__(self, commands, parent=None):
+        super().__init__(parent)
+        self.commands = commands
+        self.parent = parent
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle("Options")
+        layout = QFormLayout()
+
+        self.command_box = QComboBox(self)
+        for command in self.commands.keys():
+            self.command_box.addItem(command)
+        self.command_box.currentIndexChanged.connect(self.update_arguments)
+
+        self.arguments_layout = QVBoxLayout()
+
+        self.ok_button = QPushButton("OK")
+        self.ok_button.clicked.connect(self.execute_command)
+
+        layout.addRow("Command", self.command_box)
+        layout.addRow(self.arguments_layout)
+        layout.addRow(self.ok_button)
+
+        self.setLayout(layout)
+        self.resize(400, 300)
+
+        self.update_arguments()
+
+    def update_arguments(self):
+        command = self.command_box.currentText()
+        self.clear_arguments_layout()
+        if command == "/config":
+            key_box = QComboBox()
+            key_box.addItems(["baseurl", "ollamahost", "llamacpphost", "path", "user_color", "assistant_color", "fontsize", "openaiapikey"])
+            value_input = QLineEdit()
+            value_input.setStyleSheet("background-color: #D3D3D3;")
+            self.arguments_layout.addWidget(QLabel("Key:"))
+            self.arguments_layout.addWidget(key_box)
+            self.arguments_layout.addWidget(QLabel("Value:"))
+            self.arguments_layout.addWidget(value_input)
+            self.arguments_layout.key_box = key_box
+            self.arguments_layout.value_input = value_input
+        elif command == "/select_model":
+            provider_box = QComboBox()
+            provider_box.addItems(["OpenAI", "Anthropic", "Ollama"])
+            provider_box.currentIndexChanged.connect(self.update_models)
+            model_box = QComboBox()
+            self.update_models(provider_box.currentIndex())
+
+            self.arguments_layout.addWidget(QLabel("Provider:"))
+            self.arguments_layout.addWidget(provider_box)
+            self.arguments_layout.addWidget(QLabel("Model:"))
+            self.arguments_layout.addWidget(model_box)
+            self.arguments_layout.provider_box = provider_box
+            self.arguments_layout.model_box = model_box
+        elif command == "/system_prompt":
+            prompt_input = QLineEdit()
+            prompt_input.setStyleSheet("background-color: #D3D3D3;")
+            self.arguments_layout.addWidget(QLabel("Prompt:"))
+            self.arguments_layout.addWidget(prompt_input)
+            self.arguments_layout.prompt_input = prompt_input
+
+    def update_models(self, index):
+        provider = self.arguments_layout.provider_box.currentText()
+        model_box = self.arguments_layout.model_box
+        model_box.clear()
+
+        if provider == "OpenAI":
+            model_box.addItems(["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"])
+        elif provider == "Anthropic":
+            model_box.addItems(["claude-v1", "claude-v2"])
+        elif provider == "Ollama":
+            if self.parent and self.parent.available_models:
+                model_box.addItems([model['name'] for model in self.parent.available_models])
+
+    def clear_arguments_layout(self):
+        for i in reversed(range(self.arguments_layout.count())):
+            widget = self.arguments_layout.itemAt(i).widget()
+            if widget:
+                widget.deleteLater()
+
+    def execute_command(self):
+        command = self.command_box.currentText()
+        arguments = ""
+        if command == "/config":
+            key = self.arguments_layout.key_box.currentText()
+            value = self.arguments_layout.value_input.text()
+            arguments = f"{key} {value}"
+        elif command == "/select_model":
+            provider = self.arguments_layout.provider_box.currentText().lower()
+            model = self.arguments_layout.model_box.currentText()
+            arguments = f"{provider} {model}"
+        elif command == "/system_prompt":
+            prompt = self.arguments_layout.prompt_input.text()
+            arguments = f"{prompt}"
+
+        self.parent().user_input.setText(f"{command} {arguments}")
+        self.parent().process_input()
+        self.close()
+
+
 class Chatbox(QWidget):
     def __init__(self):
         super().__init__()
@@ -240,7 +346,7 @@ class Chatbox(QWidget):
         if not current_chat_filename:
             current_chat_filename = 'chat_1.json'
             ConfigManager.save_config_value('current_chat_filename', current_chat_filename)
-        
+
         self.selected_model = self.config.get('selected_model', "")
         self.mode = self.config.get('current_mode', "llama.cpp")
 
@@ -263,6 +369,15 @@ class Chatbox(QWidget):
         self.ollama_online, self.llamacpp_online = self.server_is_reachable()
 
         self.is_full_screen = False
+
+        self.commands = {
+            "/config": self.update_config,
+            "/chat": self.manage_chat,
+            "/models": self.list_models,
+            "/select_model": self.select_model,
+            "/resetmodel": self.reset_model,
+            "/system_prompt": self.set_system_prompt,
+        }
 
         self.initUI()
 
@@ -376,23 +491,6 @@ class Chatbox(QWidget):
 
         event.accept()
 
-    def list_models(self, parts=None):
-        if self.mode == 'ollama':
-            if not self.available_models:
-                self.chat_history.append("<b style='color: yellow;'>No models are available from Ollama.</b>")
-            else:
-                self.chat_history.append("<b style='color: yellow;'>Available models from Ollama:</b>")
-                for model in self.available_models:
-                    self.chat_history.append(f"/selectmodel <b style='color: green;'>{model['name']}</b>")
-        elif self.mode == 'openai':
-            self.chat_history.append("<b style='color: yellow;'>gpt-4-o</b>")
-        elif self.mode == 'llama.cpp':
-            self.chat_history.append("<b style='color: yellow;'>Llama.cpp does not list models dynamically in this setup. Please specify the model manually if needed.</b>")
-        else:
-            self.chat_history.append("<b style='color: red;'>Unknown mode. Cannot list models.</b>")
-
-        self.chat_history.moveCursor(QTextCursor.End)
-
     def create_transparent_icon(self):
         """Creates a transparent QIcon to replace the default window icon."""
         pixmap = QPixmap(64, 64)
@@ -428,20 +526,6 @@ class Chatbox(QWidget):
         ollama_online = self.check_server_status(self.config.get("ollamahost", "127.0.0.1:11434"))
         llamacpp_online = self.check_server_status(self.config.get("llamacpphost", "127.0.0.1:8080"))
         return ollama_online, llamacpp_online
-    
-    def resetmodel(self, parts):
-        if self.mode == 'ollama':
-            self.mode = 'llama.cpp'
-        elif self.mode == 'llama.cpp':
-            self.mode = 'openai'
-        else:
-            self.mode = 'ollama'
-            
-        ConfigManager.save_config_value('current_mode', self.mode)
-        self.chat_history.clear()
-        self.load_chat_to_display()
-        self.chat_history.append(f"<b style='color: yellow;'>Mode switched to {self.mode}. Chat history loaded.</b>")
-        self.display_welcome_message()
 
     def check_server_status(self, host):
         try:
@@ -518,23 +602,14 @@ class Chatbox(QWidget):
         parts = command.split(maxsplit=2)
         command_key = parts[0]
 
-        commands = {
-            "/config": self.update_config,
-            "/chat": self.manage_chat,
-            "/models": self.list_models,
-            "/select_model": self.selectmodel,
-            "/resetmodel": self.resetmodel,
-            "/system_prompt": self.set_system_prompt,
-        }
-
-        if command_key in commands:
+        if command_key in self.commands:
             if command_key in ["/config", "/select_model", "/system_prompt"]:
                 if len(parts) >= 2:
-                    commands[command_key](parts)
+                    self.commands[command_key](parts)
                 else:
                     self.display_error(f"Usage: {command_key} requires an argument.")
             else:
-                commands[command_key](parts)
+                self.commands[command_key](parts)
         else:
             self.display_error(f"Invalid command: {command}")
 
@@ -542,46 +617,57 @@ class Chatbox(QWidget):
         if len(parts) < 2:
             self.display_error("Usage: /system_prompt Your prompt message")
             return
-        
+
         prompt_message = parts[1]
-        
+
         self.system_prompt = prompt_message
-        
+
         self.chat_manager.save_chat_history(self.conversation_history, self.system_prompt)
-        
+
         self.chat_history.append(f"<b style='color: yellow;'>System prompt updated to: {prompt_message}</b>")
         self.chat_history.moveCursor(QTextCursor.End)
 
-    def selectmodel(self, parts):
-        if len(parts) == 2:
-            model_name = parts[1]
+    def select_model(self, parts):
+        if len(parts) == 3:
+            provider, model_name = parts[1], parts[2]
 
-            if model_name in ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]:
+            if provider == "openai":
                 self.mode = 'openai'
-            elif any(model["name"] == model_name for model in self.available_models):
+                is_valid_model = model_name in ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
+            elif provider == "anthropic":
+                self.mode = 'anthropic'
+                is_valid_model = model_name in ["claude-v1", "claude-v2"]
+            elif provider == "ollama":
                 self.mode = 'ollama'
-            else:
-                self.mode = 'llama.cpp'
-
-            is_valid_model = False
-
-            if self.mode == 'ollama':
                 is_valid_model = any(model["name"] == model_name for model in self.available_models)
-            elif self.mode == 'openai':
-                valid_openai_models = ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
-                is_valid_model = model_name in valid_openai_models
+            else:
+                is_valid_model = False
 
             if is_valid_model:
                 self.selected_model = model_name
                 ConfigManager.save_config_value('selected_model', model_name)
                 ConfigManager.save_config_value('current_mode', self.mode)
-                self.chat_history.append(f"<b style='color: yellow;'>Model selected: {model_name}</b>")
+                self.chat_history.append(f"<b style='color: yellow;'>Provider: {provider.capitalize()}, Model: {model_name}</b>")
                 self.chat_history.clear()
                 self.load_chat_to_display()
             else:
                 self.display_error(f"Invalid model name: {model_name}. Please choose a valid model.")
         else:
-            self.display_error("Usage: /select_model model_name")
+            self.display_error("Usage: /select_model provider model_name")
+
+    def reset_model(self, parts):
+        if self.mode == 'ollama':
+            self.mode = 'llama.cpp'
+        elif self.mode == 'llama.cpp':
+            self.mode = 'openai'
+        else:
+            self.mode = 'ollama'
+
+        ConfigManager.save_config_value('current_mode', self.mode)
+        self.chat_history.clear()
+        self.load_chat_to_display()
+        self.chat_history.append(f"<b style='color: yellow;'>Mode switched to {self.mode}. Chat history loaded.</b>")
+        self.display_welcome_message()
 
     def display_error(self, message):
         self.chat_history.append(f"<b style='color: red;'>Error:</b> {message}")
@@ -589,9 +675,9 @@ class Chatbox(QWidget):
 
     def initUI(self):
         self.setGeometry(300, 300, 1100, 550)
-        
+
         self.setWindowFlags(Qt.Window)
-        
+
         self.setWindowTitle(" ")
 
         main_layout = QVBoxLayout()
@@ -619,8 +705,12 @@ class Chatbox(QWidget):
         self.user_input.setFont(QFont("Courier New", self.fontsize))
         self.user_input.setStyleSheet(self.get_input_style())
 
+        self.options_button = QPushButton("Options")
+        self.options_button.clicked.connect(self.show_options_dialog)
+
         input_layout.addWidget(self.prompt_label, 0, Qt.AlignLeft)
         input_layout.addWidget(self.user_input, 1)
+        input_layout.addWidget(self.options_button, 0, Qt.AlignRight)
 
         main_layout.addLayout(chat_layout)
         main_layout.addLayout(input_layout)
@@ -650,7 +740,7 @@ class Chatbox(QWidget):
             }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
                 border: none;
-                background: none;
+                background: none.
             }}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
                 background: none.
@@ -663,13 +753,17 @@ class Chatbox(QWidget):
         """
 
     def get_chat_style(self):
-        return f"padding: 5px; background-color: #000000; color: {self.config['umc']};"
+        return f"padding: 5px; background-color: #000000; color: {self.config['user_color']};"
 
     def get_prompt_style(self):
-        return f"color: {self.config['umc']}; font-size: {self.fontsize}px; font-family: Courier New; margin: 0; padding: 0;"
+        return f"color: {self.config['user_color']}; font-size: {self.fontsize}px; font-family: Courier New; margin: 0; padding: 0;"
 
     def get_input_style(self):
-        return f"margin: 0; padding: 0; background-color: #000000; color: {self.config['umc']}; border: none;"
+        return f"margin: 0; padding: 0; background-color: #000000; color: {self.config['user_color']}; border: none;"
+
+    def show_options_dialog(self):
+        options_dialog = OptionsDialog(self.commands, self)
+        options_dialog.exec_()
 
     def load_chat_to_display(self):
         self.chat_history.clear()
@@ -759,15 +853,15 @@ class Chatbox(QWidget):
     def rename_chat_file(self, old_filename, new_filename):
         old_path = os.path.join(os.getcwd(), old_filename)
         new_path = os.path.join(os.getcwd(), new_filename)
-        
+
         if not os.path.exists(old_path):
             self.display_error(f"Chat file {old_filename} does not exist.")
             return
-        
+
         if os.path.exists(new_path):
             self.display_error(f"Chat file {new_filename} already exists.")
             return
-        
+
         try:
             shutil.move(old_path, new_path)
             self.chat_manager.set_chat_filename(new_filename)
@@ -805,24 +899,24 @@ class Chatbox(QWidget):
 
     def update_fontsizes(self):
         fontsize = int(self.fontsize)
-        
+
         self.chat_history.setFont(QFont("Courier New", fontsize))
-        
+
         self.user_input.setFont(QFont("Courier New", fontsize))
-        
-        self.prompt_label.setStyleSheet(f"color: {self.config['umc']}; font-size: {fontsize}px; font-family: Courier New; margin: 0; padding: 0;")
-        
+
+        self.prompt_label.setStyleSheet(f"color: {self.config['user_color']}; font-size: {fontsize}px; font-family: Courier New; margin: 0; padding: 0;")
+
         self.chat_history.setStyleSheet(self.get_chat_style())
-        
+
         self.setStyleSheet(self.get_global_style())
-        
+
     def send_message(self, user_message):
         user_message_html = markdown.markdown(user_message, extensions=['tables', 'fenced_code'])
         user_message_html = self.apply_custom_css(user_message_html, role="user")
-        
+
         self.chat_history.append(user_message_html)
         self.chat_history.moveCursor(QTextCursor.End)
-        
+
         self.conversation_history.append({"role": "user", "content": user_message})
         self.chat_manager.save_chat_history(self.conversation_history, self.system_prompt)
 
@@ -848,7 +942,7 @@ class Chatbox(QWidget):
             if not api_key:
                 self.handle_error("OpenAI API key is not set. Please update your configuration.")
                 return
-            
+
             if not self.selected_model:
                 self.selected_model = "gpt-4o"
 
@@ -866,7 +960,7 @@ class Chatbox(QWidget):
             return
 
         headers = headers if self.mode == 'openai' else {"Content-Type": "application/json"}
-        
+
         self.worker = NetworkWorker(self.conversation_history, full_endpoint, data, headers)
         self.worker.response_received.connect(self.handle_response)
         self.worker.error_occurred.connect(self.handle_error)
@@ -902,10 +996,10 @@ class Chatbox(QWidget):
             }
             table {
                 width: 100%;
-                border-collapse: collapse;
+                border-collapse: collapse.
             }
             th, td {
-                border: 1px solid;
+                border: 1px solid.
                 padding: 2px;
             }
             blockquote {
@@ -920,13 +1014,13 @@ class Chatbox(QWidget):
             custom_css += f"""
             <style>
                 .user-message {{
-                    color: {self.config['umc']};
+                    color: {self.config['user_color']};
                     font-family: 'Courier New';
                     background-color: #000000;
                 }}
                 blockquote {{
-                    color: {self.config['umc']};
-                    border-color: {self.config['umc']};
+                    color: {self.config['user_color']};
+                    border-color: {self.config['user_color']};
                 }}
             </style>
             """
@@ -935,18 +1029,18 @@ class Chatbox(QWidget):
             custom_css += f"""
             <style>
                 .bot-message {{
-                    color: {self.config['amc']};
+                    color: {self.config['assistant_color']};
                     font-family: 'Courier New';
                     background-color: #000000;
                 }}
                 blockquote {{
-                    color: {self.config['amc']};
-                    border-color: {self.config['amc']};
+                    color: {self.config['assistant_color']};
+                    border-color: {self.config['assistant_color']};
                 }}
             </style>
             """
             return f"{custom_css}<div class='bot-message'>{html_content}</div>"
-        
+
     def display_models_list(self):
         ollama_status, _ = self.server_is_reachable()
         openai_status = bool(self.config.get('openaiapikey'))
@@ -955,22 +1049,23 @@ class Chatbox(QWidget):
             openai_models = ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
             self.chat_history.append("<b style='color: yellow;'>Available models from OpenAI:</b>")
             for model in openai_models:
-                self.chat_history.append(f"<b style='color: green;'>/select_model {model}</b>")
+                self.chat_history.append(f"<b style='color: green;'>/select_model openai {model}</b>")
             self.chat_history.append("<b style='color: yellow;'>Copy and paste a command to select a model and press enter.</b>")
 
         if ollama_status:
             if self.available_models:
                 self.chat_history.append("<b style='color: yellow;'>Available models from Ollama:</b>")
                 for model in self.available_models:
-                    self.chat_history.append(f"<b style='color: green;'>/select_model {model['name']}</b>")
+                    self.chat_history.append(f"<b style='color: green;'>/select_model ollama {model['name']}</b>")
                 self.chat_history.append("<b style='color: yellow;'>Copy and paste a command to select a model and press enter.</b>")
             else:
                 self.chat_history.append("<b style='color: yellow;'>No available models found from Ollama.</b>")
 
         self.chat_history.moveCursor(QTextCursor.End)
-    
+
     def list_models(self, parts):
         self.display_models_list()
+
 
 if __name__ == "__main__":
     config = ConfigManager.load_config()

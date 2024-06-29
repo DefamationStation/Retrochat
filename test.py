@@ -117,7 +117,7 @@ class SettingsDialog(QDialog):
         layout.addRow("Assistant Color:", self.assistant_color_input)
 
         self.font_size_input = QSpinBox()
-        self.font_size_input.setRange(8, 24)
+        self.font_size_input.setRange(8, 45)
         self.font_size_input.setValue(self.parent.config["fontsize"])
         layout.addRow("Font Size:", self.font_size_input)
 

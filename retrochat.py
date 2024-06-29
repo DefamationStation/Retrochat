@@ -30,8 +30,8 @@ class ConfigManager:
     CONFIG_FILENAME = "config.json"
     DEFAULT_CONFIG = {
         "baseurl": "http://",
-        "ollamahost": "127.0.0.1:11434",
-        "llamacpphost": "127.0.0.1:8080",
+        "ollamahost": "192.168.1.82:11434",
+        "llamacpphost": "192.168.1.82:8080",
         "path": "/v1/chat/completions",
         "umc": "#00FF00",
         "amc": "#FFBF00",
@@ -524,7 +524,6 @@ class Chatbox(QWidget):
             "/models": self.list_models,
             "/select_model": self.selectmodel,
             "/resetmodel": self.resetmodel,
-            "/help": self.display_help_message,
             "/system_prompt": self.set_system_prompt,
         }
 
@@ -629,9 +628,6 @@ class Chatbox(QWidget):
         self.setLayout(main_layout)
         self.setStyleSheet(self.get_global_style())
 
-        if not self.conversation_history and not self.selected_model:
-            self.display_help_message()
-
     def get_global_style(self):
         return f"""
             QWidget {{
@@ -659,6 +655,11 @@ class Chatbox(QWidget):
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
                 background: none.
             }}
+            QTextEdit {{
+                padding: 1px;  /* Further reduced padding */
+                margin: 0;    /* No margin */
+                line-height: 1.1;  /* Further adjusted line height */
+            }}
         """
 
     def get_chat_style(self):
@@ -681,50 +682,6 @@ class Chatbox(QWidget):
                 assistant_message_html = markdown.markdown(message['content'], extensions=['tables', 'fenced_code'])
                 assistant_message_html = self.apply_custom_css(assistant_message_html, role="assistant")
                 self.chat_history.append(assistant_message_html)
-        self.chat_history.moveCursor(QTextCursor.End)
-
-    def display_help_message(self, parts=None):
-        help_message = """
-        <p><strong>Available Commands:</strong></p>
-
-        <p><strong>/config</strong></p>
-        <p>Customize your chat experience by adjusting various settings.</p>
-        <p><strong>Usage:</strong> <code>/config &lt;key&gt; &lt;value&gt;</code></p>
-        <p><strong>Available Keys:</strong></p>
-        <ul>
-            <li><code>fontsize</code>: Adjust the size of the font. Example: <code>/config fontsize 18</code></li>
-            <li><code>baseurl</code>: Set the base URL for API requests. Example: <code>/config baseurl http://new-url.com</code></li>
-            <li><code>openaiapikey</code>: Set your OpenAI API key. Example: <code>/config openaiapikey YOUR_API_KEY</code></li>
-            <li><code>umc</code>: Change the color of user messages. Example: <code>/config umc #00FF00</code></li>
-            <li><code>amc</code>: Change the color of assistant messages. Example: <code>/config amc #FFBF00</code></li>
-            <li><code>system_prompt</code>: Set a custom system prompt for the chat session. Example: <code>/config system_prompt "Your prompt here"</code></li>
-        </ul>
-
-        <p><strong>/chat</strong></p>
-        <p>Manage your chat sessions.</p>
-        <p><strong>Usage:</strong> <code>/chat &lt;action&gt; &lt;filename&gt; [new_name]</code></p>
-        <p><strong>Available Actions:</strong></p>
-        <ul>
-            <li><code>new &lt;filename&gt;</code>: Create and switch to a new chat file. Example: <code>/chat new my_chat.json</code></li>
-            <li><code>save &lt;filename&gt;</code>: Save the current chat history to a specified file. Example: <code>/chat save my_chat_backup.json</code></li>
-            <li><code>delete &lt;filename&gt;</code>: Permanently delete a specified chat file. Example: <code>/chat delete old_chat.json</code></li>
-            <li><code>reset</code>: Clear the current chat history. Example: <code>/chat reset</code></li>
-            <li><code>rename &lt;old_filename&gt; &lt;new_filename&gt;</code>: Rename a chat file. Example: <code>/chat rename chat_1.json new_chat_name.json</code></li>
-            <li><code>open &lt;filename&gt;</code>: Open and load an existing chat file. Example: <code>/chat open my_chat.json</code></li>
-            <li><code>list</code>: List all JSON chat files in the current directory.</li>
-        </ul>
-
-        <p><strong>/models</strong></p>
-        <p>List available models from Ollama or OpenAI (depending on the current mode).</p>
-
-        <p><strong>/selectmodel</strong></p>
-        <p>Select a model for the current mode. Example: <code>/selectmodel gpt-4o</code> for OpenAI or <code>/selectmodel model_name</code> for Ollama.</p>
-        
-        <p><strong>/resetmodel</strong></p>
-        <p>Switch between available modes (llama.cpp, ollama, openai). Example: <code>/resetmodel</code></p>
-        """
-        self.chat_history.setHtml(help_message)
-        self.help_message_displayed = True
         self.chat_history.moveCursor(QTextCursor.End)
 
     def update_config(self, parts):
@@ -929,72 +886,62 @@ class Chatbox(QWidget):
         self.chat_history.append(f"<b style='color: red;'>Error:</b> {error_message}")
 
     def apply_custom_css(self, html_content, role):
+        custom_css = """
+        <style>
+            .user-message, .bot-message {
+                margin: 1px 0;
+                padding: 0;
+                line-height: 1.1;
+                margin-bottom: 1px;
+            }
+            pre, code {
+                background-color: #333333;
+                border-radius: 4px;
+                padding: 2px;
+                margin: 0;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            th, td {
+                border: 1px solid;
+                padding: 2px;
+            }
+            blockquote {
+                border-left: 4px solid;
+                margin: 3px 0;
+                padding-left: 10px;
+                background-color: #222222;
+            }
+        </style>
+        """
         if role == "user":
-            custom_css = f"""
+            custom_css += f"""
             <style>
-                div.user-message {{
+                .user-message {{
                     color: {self.config['umc']};
                     font-family: 'Courier New';
                     background-color: #000000;
-                    margin: 0;
-                    padding: 2px 0;
-                }}
-                pre, code {{
-                    background-color: #333333;
-                    color: {self.config['umc']};
-                    border-radius: 4px;
-                    padding: 5px;
-                    margin: 0;
-                }}
-                table {{
-                    width: 100%;
-                    border-collapse: collapse;
-                }}
-                th, td {{
-                    border: 1px solid {self.config['umc']};
-                    padding: 3px;
                 }}
                 blockquote {{
-                    border-left: 4px solid {self.config['umc']};
-                    margin: 5px 0;
-                    padding-left: 10px;
                     color: {self.config['umc']};
-                    background-color: #222222;
+                    border-color: {self.config['umc']};
                 }}
             </style>
             """
             return f"{custom_css}<div class='user-message'>{html_content}</div>"
         else:
-            custom_css = f"""
+            custom_css += f"""
             <style>
-                div.bot-message {{
+                .bot-message {{
                     color: {self.config['amc']};
                     font-family: 'Courier New';
                     background-color: #000000;
-                    margin: 0;
-                    padding: 2px 0;
-                }}
-                pre, code {{
-                    background-color: #333333;
-                    color: {self.config['amc']};
-                    border-radius: 4px;
-                    padding: 5px;
-                    margin: 0;
-                }}
-                table {{
-                    width: 100%;
-                    border-collapse: collapse.
-                }}
-                th, td {{
-                    border: 1px solid {self.config['amc']};
-                    padding: 3px;
                 }}
                 blockquote {{
-                    border-left: 4px solid {self.config['amc']};
-                    margin: 5px 0;
-                    padding-left: 10px;
                     color: {self.config['amc']};
-                    background-color: #222222;
+                    border-color: {self.config['amc']};
                 }}
             </style>
             """
